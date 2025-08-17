@@ -14,7 +14,7 @@ import {
 
 const RAG_CONFIG = {
   SERVER_URL: 'http://localhost:3000',
-  OPENAI_API_KEY: '',
+  OPENAI_KEY: ``,
   MAX_RESULTS: 5,
   SIMILARITY_THRESHOLD: 0.7
 };
@@ -60,274 +60,274 @@ document.addEventListener("DOMContentLoaded", () => {
       console.warn('web-scraper init failed (non-fatal):', e);
     }
   })();
-  function initSpeechRecognition() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+//   function initSpeechRecognition() {
+//   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   
-  if (!SpeechRecognition) {
-    console.warn("Speech Recognition not supported in this browser.");
-    if (micBtn) {
-      micBtn.disabled = true;
-      micBtn.title = "Speech Recognition not supported in this browser";
-      micBtn.style.opacity = "0.5";
-    }
-    return;
-  }
+//   if (!SpeechRecognition) {
+//     console.warn("Speech Recognition not supported in this browser.");
+//     if (micBtn) {
+//       micBtn.disabled = true;
+//       micBtn.title = "Speech Recognition not supported in this browser";
+//       micBtn.style.opacity = "0.5";
+//     }
+//     return;
+//   }
 
-  recognition = new SpeechRecognition();
-  recognition.continuous = false;
-  recognition.interimResults = false;
-  recognition.lang = "en-US";
-  recognition.maxAlternatives = 1;
+//   recognition = new SpeechRecognition();
+//   recognition.continuous = false;
+//   recognition.interimResults = false;
+//   recognition.lang = "en-US";
+//   recognition.maxAlternatives = 1;
 
-  recognition.onstart = () => {
-    console.log("🎤 Speech recognition started");
-    isMicActive = true;
-    if (micBtn) {
-      micBtn.textContent = '🔴';
-      micBtn.style.color = 'red';
-      micBtn.style.animation = 'pulse 1s infinite';
-      micBtn.title = 'Listening... Click to stop';
-    }
-  };
+//   recognition.onstart = () => {
+//     console.log("🎤 Speech recognition started");
+//     isMicActive = true;
+//     if (micBtn) {
+//       micBtn.textContent = '🔴';
+//       micBtn.style.color = 'red';
+//       micBtn.style.animation = 'pulse 1s infinite';
+//       micBtn.title = 'Listening... Click to stop';
+//     }
+//   };
 
-  recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript.trim();
-    console.log("🎤 Speech recognized:", transcript);
+//   recognition.onresult = (event) => {
+//     const transcript = event.results[0][0].transcript.trim();
+//     console.log("🎤 Speech recognized:", transcript);
     
-    if (chatInput && transcript) {
-      chatInput.value = transcript;
-      // Automatically send the message
-      setTimeout(() => {
-        if (!isProcessing) {
-          chatInput.dispatchEvent(new KeyboardEvent("keydown", { 
-            key: "Enter",
-            bubbles: true,
-            cancelable: true
-          }));
-        }
-      }, 100);
-    }
-  };
+//     if (chatInput && transcript) {
+//       chatInput.value = transcript;
+//       // Automatically send the message
+//       setTimeout(() => {
+//         if (!isProcessing) {
+//           chatInput.dispatchEvent(new KeyboardEvent("keydown", { 
+//             key: "Enter",
+//             bubbles: true,
+//             cancelable: true
+//           }));
+//         }
+//       }, 100);
+//     }
+//   };
 
-  recognition.onend = () => {
-    console.log("🎤 Speech recognition ended");
-    isMicActive = false;
-    if (micBtn) {
-      micBtn.textContent = '🎤';
-      micBtn.style.color = '';
-      micBtn.style.animation = '';
-      micBtn.title = 'Click to speak your question';
-    }
-  };
+//   recognition.onend = () => {
+//     console.log("🎤 Speech recognition ended");
+//     isMicActive = false;
+//     if (micBtn) {
+//       micBtn.textContent = '🎤';
+//       micBtn.style.color = '';
+//       micBtn.style.animation = '';
+//       micBtn.title = 'Click to speak your question';
+//     }
+//   };
 
-  recognition.onerror = (event) => {
-    console.error("🎤 Speech recognition error:", event.error);
-    isMicActive = false;
+//   recognition.onerror = (event) => {
+//     console.error("🎤 Speech recognition error:", event.error);
+//     isMicActive = false;
     
-    if (micBtn) {
-      micBtn.textContent = '🎤';
-      micBtn.style.color = '';
-      micBtn.style.animation = '';
-      micBtn.title = 'Speech recognition error. Click to try again.';
-    }
+//     if (micBtn) {
+//       micBtn.textContent = '🎤';
+//       micBtn.style.color = '';
+//       micBtn.style.animation = '';
+//       micBtn.title = 'Speech recognition error. Click to try again.';
+//     }
 
-    // Show user-friendly error messages
-    let errorMessage = "Voice input error: ";
-    switch(event.error) {
-      case 'no-speech':
-        errorMessage += "No speech detected. Please try again.";
-        break;
-      case 'audio-capture':
-        errorMessage += "Microphone not available. Please check permissions.";
-        break;
-      case 'not-allowed':
-        errorMessage += "Microphone access denied. Please allow microphone access.";
-        break;
-      case 'network':
-        errorMessage += "Network error. Please check your connection.";
-        break;
-      default:
-        errorMessage += event.error;
-    }
+//     // Show user-friendly error messages
+//     let errorMessage = "Voice input error: ";
+//     switch(event.error) {
+//       case 'no-speech':
+//         errorMessage += "No speech detected. Please try again.";
+//         break;
+//       case 'audio-capture':
+//         errorMessage += "Microphone not available. Please check permissions.";
+//         break;
+//       case 'not-allowed':
+//         errorMessage += "Microphone access denied. Please allow microphone access.";
+//         break;
+//       case 'network':
+//         errorMessage += "Network error. Please check your connection.";
+//         break;
+//       default:
+//         errorMessage += event.error;
+//     }
     
-    // Show error in chat
-    if (chatMessages) {
-      const errorBubble = document.createElement("div");
-      errorBubble.className = "chat-bubble ai-bubble error-bubble";
-      errorBubble.innerHTML = `⚠️ ${errorMessage}`;
-      errorBubble.style.backgroundColor = "#ffe6e6";
-      errorBubble.style.borderLeft = "3px solid #ff4444";
-      chatMessages.appendChild(errorBubble);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-  };
-}
+//     // Show error in chat
+//     if (chatMessages) {
+//       const errorBubble = document.createElement("div");
+//       errorBubble.className = "chat-bubble ai-bubble error-bubble";
+//       errorBubble.innerHTML = `⚠️ ${errorMessage}`;
+//       errorBubble.style.backgroundColor = "#ffe6e6";
+//       errorBubble.style.borderLeft = "3px solid #ff4444";
+//       chatMessages.appendChild(errorBubble);
+//       chatMessages.scrollTop = chatMessages.scrollHeight;
+//     }
+//   };
+// }
 
   // Function to initialize a new transcript document
-  async function initializeTranscriptDocument(uid, meetingId, docId, startTime, status) {
-    try {
-      const transcriptDocRef = doc(db, "users", uid, "meetings", meetingId, "transcripts", docId);
-      await setDoc(transcriptDocRef, {
-        transcript: "",
-        startTime: startTime,
-        lastUpdated: startTime,
-        status: status,
-        wordCount: 0,
-        createdAt: serverTimestamp()
-      });
-      console.log(`Initialized transcript document: ${docId}`);
-    } catch (error) {
-      console.error("Error initializing transcript document:", error);
-      await storeTranscriptInStorage(uid, meetingId, docId, {
-        transcript: "",
-        startTime: startTime,
-        status: status
-      });
-    }
-  }
+  // async function initializeTranscriptDocument(uid, meetingId, docId, startTime, status) {
+  //   try {
+  //     const transcriptDocRef = doc(db, "users", uid, "meetings", meetingId, "transcripts", docId);
+  //     await setDoc(transcriptDocRef, {
+  //       transcript: "",
+  //       startTime: startTime,
+  //       lastUpdated: startTime,
+  //       status: status,
+  //       wordCount: 0,
+  //       createdAt: serverTimestamp()
+  //     });
+  //     console.log(`Initialized transcript document: ${docId}`);
+  //   } catch (error) {
+  //     console.error("Error initializing transcript document:", error);
+  //     await storeTranscriptInStorage(uid, meetingId, docId, {
+  //       transcript: "",
+  //       startTime: startTime,
+  //       status: status
+  //     });
+  //   }
+  // }
 
-  // Function to update transcript document in real-time
-  async function updateTranscriptDocument(uid, meetingId, docId, transcript, lastUpdated, status) {
-    try {
-      const transcriptDocRef = doc(db, "users", uid, "meetings", meetingId, "transcripts", docId);
+  // // Function to update transcript document in real-time
+  // async function updateTranscriptDocument(uid, meetingId, docId, transcript, lastUpdated, status) {
+  //   try {
+  //     const transcriptDocRef = doc(db, "users", uid, "meetings", meetingId, "transcripts", docId);
       
-      await setDoc(transcriptDocRef, {
-        transcript: transcript,
-        lastUpdated: lastUpdated,
-        status: status,
-        wordCount: transcript.trim().split(/\s+/).filter(word => word.length > 0).length
-      }, { merge: true });
+  //     await setDoc(transcriptDocRef, {
+  //       transcript: transcript,
+  //       lastUpdated: lastUpdated,
+  //       status: status,
+  //       wordCount: transcript.trim().split(/\s+/).filter(word => word.length > 0).length
+  //     }, { merge: true });
       
-      console.log(`Updated transcript document: ${docId} (${transcript.length} chars)`);
-    } catch (error) {
-      console.error("Error updating transcript document:", error);
-      await storeTranscriptInStorage(uid, meetingId, docId, {
-        transcript: transcript,
-        lastUpdated: lastUpdated,
-        status: status
-      });
-    }
-  }
+  //     console.log(`Updated transcript document: ${docId} (${transcript.length} chars)`);
+  //   } catch (error) {
+  //     console.error("Error updating transcript document:", error);
+  //     await storeTranscriptInStorage(uid, meetingId, docId, {
+  //       transcript: transcript,
+  //       lastUpdated: lastUpdated,
+  //       status: status
+  //     });
+  //   }
+  // }
 
-  // Function to finalize transcript document
-  async function finalizeTranscriptDocument(uid, meetingId, docId, transcript, endTime, wordCount, status) {
-    try {
-      const transcriptDocRef = doc(db, "users", uid, "meetings", meetingId, "transcripts", docId);
+  // // Function to finalize transcript document
+  // async function finalizeTranscriptDocument(uid, meetingId, docId, transcript, endTime, wordCount, status) {
+  //   try {
+  //     const transcriptDocRef = doc(db, "users", uid, "meetings", meetingId, "transcripts", docId);
       
-      await setDoc(transcriptDocRef, {
-        transcript: transcript,
-        endTime: endTime,
-        status: status,
-        wordCount: wordCount,
-        finalizedAt: serverTimestamp()
-      }, { merge: true });
+  //     await setDoc(transcriptDocRef, {
+  //       transcript: transcript,
+  //       endTime: endTime,
+  //       status: status,
+  //       wordCount: wordCount,
+  //       finalizedAt: serverTimestamp()
+  //     }, { merge: true });
       
-      console.log(`Finalized transcript document: ${docId} (${wordCount} words)`);
-    } catch (error) {
-      console.error("Error finalizing transcript document:", error);
-      await storeTranscriptInStorage(uid, meetingId, docId, {
-        transcript: transcript,
-        endTime: endTime,
-        status: status,
-        wordCount: wordCount
-      });
-    }
-  }
+  //     console.log(`Finalized transcript document: ${docId} (${wordCount} words)`);
+  //   } catch (error) {
+  //     console.error("Error finalizing transcript document:", error);
+  //     await storeTranscriptInStorage(uid, meetingId, docId, {
+  //       transcript: transcript,
+  //       endTime: endTime,
+  //       status: status,
+  //       wordCount: wordCount
+  //     });
+  //   }
+  // }
 
-  // Function to process queued transcripts (legacy support)
-  async function processQueuedTranscripts(queue) {
-    for (const item of queue) {
-      try {
-        const transcriptDocRef = doc(collection(db, "users", item.uid, "meetings", item.meetingId, "transcripts"));
-        await setDoc(transcriptDocRef, { 
-          content: item.transcript, 
-          timestamp: serverTimestamp() 
-        }, { merge: true });
-        console.log(`Processed queued transcript for meeting ${item.meetingId}`);
-      } catch (error) {
-        console.error("Error processing queued transcript:", error);
-      }
-    }
+  // // Function to process queued transcripts (legacy support)
+  // async function processQueuedTranscripts(queue) {
+  //   for (const item of queue) {
+  //     try {
+  //       const transcriptDocRef = doc(collection(db, "users", item.uid, "meetings", item.meetingId, "transcripts"));
+  //       await setDoc(transcriptDocRef, { 
+  //         content: item.transcript, 
+  //         timestamp: serverTimestamp() 
+  //       }, { merge: true });
+  //       console.log(`Processed queued transcript for meeting ${item.meetingId}`);
+  //     } catch (error) {
+  //       console.error("Error processing queued transcript:", error);
+  //     }
+  //   }
     
-    await processStoredTranscripts();
-  }
+  //   await processStoredTranscripts();
+  // }
 
   // Function to process transcripts stored in chrome.storage
-  async function processStoredTranscripts() {
-    try {
-      const allData = await chrome.storage.local.get();
-      const transcriptKeys = Object.keys(allData).filter(key => key.startsWith('transcript_'));
+  // async function processStoredTranscripts() {
+  //   try {
+  //     const allData = await chrome.storage.local.get();
+  //     const transcriptKeys = Object.keys(allData).filter(key => key.startsWith('transcript_'));
       
-      if (transcriptKeys.length > 0) {
-        for (const key of transcriptKeys) {
-          const parts = key.split('_');
-          if (parts.length >= 4) {
-            const [, uid, meetingId, docId] = parts;
-            const data = allData[key];
+  //     if (transcriptKeys.length > 0) {
+  //       for (const key of transcriptKeys) {
+  //         const parts = key.split('_');
+  //         if (parts.length >= 4) {
+  //           const [, uid, meetingId, docId] = parts;
+  //           const data = allData[key];
             
-            if (data && typeof data === 'object') {
-              const transcriptDocRef = doc(db, "users", uid, "meetings", meetingId, "transcripts", docId);
-              await setDoc(transcriptDocRef, {
-                transcript: data.transcript || "",
-                startTime: data.startTime,
-                endTime: data.endTime,
-                lastUpdated: data.lastUpdated,
-                status: data.status || 'completed',
-                wordCount: data.wordCount || 0,
-                createdAt: serverTimestamp()
-              });
+  //           if (data && typeof data === 'object') {
+  //             const transcriptDocRef = doc(db, "users", uid, "meetings", meetingId, "transcripts", docId);
+  //             await setDoc(transcriptDocRef, {
+  //               transcript: data.transcript || "",
+  //               startTime: data.startTime,
+  //               endTime: data.endTime,
+  //               lastUpdated: data.lastUpdated,
+  //               status: data.status || 'completed',
+  //               wordCount: data.wordCount || 0,
+  //               createdAt: serverTimestamp()
+  //             });
               
-              await chrome.storage.local.remove(key);
-              console.log(`Processed stored transcript: ${docId}`);
-            }
-          } else if (parts.length === 3) {
-            const [, uid, meetingId] = parts;
-            const transcript = allData[key];
+  //             await chrome.storage.local.remove(key);
+  //             console.log(`Processed stored transcript: ${docId}`);
+  //           }
+  //         } else if (parts.length === 3) {
+  //           const [, uid, meetingId] = parts;
+  //           const transcript = allData[key];
             
-            if (transcript && transcript.trim()) {
-              const transcriptDocRef = doc(collection(db, "users", uid, "meetings", meetingId, "transcripts"));
-              await setDoc(transcriptDocRef, { 
-                content: transcript, 
-                timestamp: serverTimestamp() 
-              });
+  //           if (transcript && transcript.trim()) {
+  //             const transcriptDocRef = doc(collection(db, "users", uid, "meetings", meetingId, "transcripts"));
+  //             await setDoc(transcriptDocRef, { 
+  //               content: transcript, 
+  //               timestamp: serverTimestamp() 
+  //             });
               
-              await chrome.storage.local.remove(key);
-              console.log(`Processed legacy stored transcript for meeting ${meetingId}`);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error processing stored transcripts:", error);
-    }
-  }
+  //             await chrome.storage.local.remove(key);
+  //             console.log(`Processed legacy stored transcript for meeting ${meetingId}`);
+  //           }
+  //         }
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error("Error processing stored transcripts:", error);
+  //   }
+  // }
 
-  // Fallback storage function
-  async function storeTranscriptInStorage(uid, meetingId, docId, data) {
-    try {
-      const storageKey = `transcript_${uid}_${meetingId}_${docId}`;
-      await chrome.storage.local.set({
-        [storageKey]: data
-      });
-      console.log("Transcript stored in chrome.storage as backup:", storageKey);
-    } catch (error) {
-      console.error("Failed to store transcript in storage:", error);
-    }
-  }
+  // // Fallback storage function
+  // async function storeTranscriptInStorage(uid, meetingId, docId, data) {
+  //   try {
+  //     const storageKey = `transcript_${uid}_${meetingId}_${docId}`;
+  //     await chrome.storage.local.set({
+  //       [storageKey]: data
+  //     });
+  //     console.log("Transcript stored in chrome.storage as backup:", storageKey);
+  //   } catch (error) {
+  //     console.error("Failed to store transcript in storage:", error);
+  //   }
+  // }
 
-  // Function to save transcript to Firebase (for direct requests - legacy)
-  async function saveTranscriptToFirebase(uid, meetingId, transcript) {
-    try {
-      const transcriptDocRef = doc(collection(db, "users", uid, "meetings", meetingId, "transcripts"));
-      await setDoc(transcriptDocRef, { 
-        content: transcript, 
-        timestamp: serverTimestamp() 
-      }, { merge: true });
-      console.log("Transcript saved successfully via chat window");
-    } catch (err) {
-      console.error("Failed to save transcript:", err);
-    }
-  }
+  // // Function to save transcript to Firebase (for direct requests - legacy)
+  // async function saveTranscriptToFirebase(uid, meetingId, transcript) {
+  //   try {
+  //     const transcriptDocRef = doc(collection(db, "users", uid, "meetings", meetingId, "transcripts"));
+  //     await setDoc(transcriptDocRef, { 
+  //       content: transcript, 
+  //       timestamp: serverTimestamp() 
+  //     }, { merge: true });
+  //     console.log("Transcript saved successfully via chat window");
+  //   } catch (err) {
+  //     console.error("Failed to save transcript:", err);
+  //   }
+  // }
 
   // Function to load transcript (updated to handle new format)
   async function loadTranscript(uid, meetingId) {
@@ -383,25 +383,25 @@ document.addEventListener("DOMContentLoaded", () => {
     return null;
   }
 }
-  /**
-   * Calculate cosine similarity between two vectors
-   */
-  function cosineSimilarity(a, b) {
-    if (a.length !== b.length) return 0;
+  // /**
+  //  * Calculate cosine similarity between two vectors
+  //  */
+  // function cosineSimilarity(a, b) {
+  //   if (a.length !== b.length) return 0;
 
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
+  //   let dotProduct = 0;
+  //   let normA = 0;
+  //   let normB = 0;
 
-    for (let i = 0; i < a.length; i++) {
-      dotProduct += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
-    }
+  //   for (let i = 0; i < a.length; i++) {
+  //     dotProduct += a[i] * b[i];
+  //     normA += a[i] * a[i];
+  //     normB += b[i] * b[i];
+  //   }
 
-    if (normA === 0 || normB === 0) return 0;
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-  }
+  //   if (normA === 0 || normB === 0) return 0;
+  //   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  // }
   
 
 async function uploadChunksToPinecone(chunks, filename) {
@@ -482,18 +482,18 @@ async function performRAGSearch(query, namespace) {
 }
 
 
-/**
- * Performs two searches: one in the meeting-specific namespace and one in the default.
- * Combines and sorts the results by similarity.
- */
-async function performCombinedRAGSearch(query, meetingId) {
-  const transcriptResults = await performRAGSearch(query, meetingId);
-  const driveResults = await performRAGSearch(query); // default namespace
-  const combined = [...transcriptResults, ...driveResults]
-    .sort((a, b) => b.similarity - a.similarity);
-  // Limit to the configured maximum
-  return combined.slice(0, RAG_CONFIG.MAX_RESULTS);
-}
+// /**
+//  * Performs two searches: one in the meeting-specific namespace and one in the default.
+//  * Combines and sorts the results by similarity.
+//  */
+// async function performCombinedRAGSearch(query, meetingId) {
+//   const transcriptResults = await performRAGSearch(query, meetingId);
+//   const driveResults = await performRAGSearch(query); // default namespace
+//   const combined = [...transcriptResults, ...driveResults]
+//     .sort((a, b) => b.similarity - a.similarity);
+//   // Limit to the configured maximum
+//   return combined.slice(0, RAG_CONFIG.MAX_RESULTS);
+// }
 
 
 
@@ -627,298 +627,298 @@ function getActiveNamespaces() {
   return list;
 }
 
-// Replace the existing pineconeSearchAcrossNamespaces function with this enhanced version:
+// // Replace the existing pineconeSearchAcrossNamespaces function with this enhanced version:
 
-async function pineconeSearchAcrossNamespaces(queryEmbedding, topK = 5) {
-  const namespaces = getActiveNamespaces();
-  const allResults = [];
-  const maxPerNamespace = Math.ceil(topK * 1.5); // Get more results per namespace to ensure good coverage
+// async function pineconeSearchAcrossNamespaces(queryEmbedding, topK = 5) {
+//   const namespaces = getActiveNamespaces();
+//   const allResults = [];
+//   const maxPerNamespace = Math.ceil(topK * 1.5); // Get more results per namespace to ensure good coverage
 
-  console.log(`🔍 Searching across ${namespaces.length} namespaces for better coverage...`);
+//   console.log(`🔍 Searching across ${namespaces.length} namespaces for better coverage...`);
 
-  // Search each namespace in parallel for better performance
-  const searchPromises = namespaces.map(async (ns) => {
-    try {
-      const r = await fetch(`${RAG_CONFIG.SERVER_URL}/search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          queryEmbedding,
-          topK: maxPerNamespace,
-          includeMetadata: true,
-          namespace: ns
-        }),
-        signal: AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined
-      });
+//   // Search each namespace in parallel for better performance
+//   const searchPromises = namespaces.map(async (ns) => {
+//     try {
+//       const r = await fetch(`${RAG_CONFIG.SERVER_URL}/search`, {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify({
+//           queryEmbedding,
+//           topK: maxPerNamespace,
+//           includeMetadata: true,
+//           namespace: ns
+//         }),
+//         signal: AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined
+//       });
       
-      if (r.ok) {
-        const arr = await r.json();
-        arr.forEach(x => {
-          x._namespace = ns; // Keep track of source namespace
-          x._source = getNamespaceSourceType(ns); // Add human-readable source type
-        });
-        console.log(`✅ Namespace "${ns}": ${arr.length} results`);
-        return arr;
-      } else {
-        console.warn(`⚠️ Namespace "${ns}" search failed:`, r.status);
-        return [];
-      }
-    } catch (e) {
-      console.warn(`⚠️ Namespace "${ns}" error:`, String(e));
-      return [];
-    }
-  });
+//       if (r.ok) {
+//         const arr = await r.json();
+//         arr.forEach(x => {
+//           x._namespace = ns; // Keep track of source namespace
+//           x._source = getNamespaceSourceType(ns); // Add human-readable source type
+//         });
+//         console.log(`✅ Namespace "${ns}": ${arr.length} results`);
+//         return arr;
+//       } else {
+//         console.warn(`⚠️ Namespace "${ns}" search failed:`, r.status);
+//         return [];
+//       }
+//     } catch (e) {
+//       console.warn(`⚠️ Namespace "${ns}" error:`, String(e));
+//       return [];
+//     }
+//   });
 
-  // Wait for all searches to complete
-  const results = await Promise.all(searchPromises);
+//   // Wait for all searches to complete
+//   const results = await Promise.all(searchPromises);
   
-  // Flatten and combine results
-  results.forEach(arr => allResults.push(...arr));
+//   // Flatten and combine results
+//   results.forEach(arr => allResults.push(...arr));
 
-  // Sort by similarity/score and take top results
-  const sorted = allResults
-    .sort((a, b) => (b.similarity ?? b.score ?? 0) - (a.similarity ?? a.score ?? 0))
-    .slice(0, topK);
+//   // Sort by similarity/score and take top results
+//   const sorted = allResults
+//     .sort((a, b) => (b.similarity ?? b.score ?? 0) - (a.similarity ?? a.score ?? 0))
+//     .slice(0, topK);
 
-  console.log(`🎯 Final results: ${sorted.length} from ${new Set(sorted.map(r => r._namespace)).size} namespaces`);
+//   console.log(`🎯 Final results: ${sorted.length} from ${new Set(sorted.map(r => r._namespace)).size} namespaces`);
   
-  // Log source breakdown for debugging
-  const sourceBreakdown = {};
-  sorted.forEach(r => {
-    const source = r._source || r._namespace || 'unknown';
-    sourceBreakdown[source] = (sourceBreakdown[source] || 0) + 1;
-  });
-  console.log(`📊 Source breakdown:`, sourceBreakdown);
+//   // Log source breakdown for debugging
+//   const sourceBreakdown = {};
+//   sorted.forEach(r => {
+//     const source = r._source || r._namespace || 'unknown';
+//     sourceBreakdown[source] = (sourceBreakdown[source] || 0) + 1;
+//   });
+//   console.log(`📊 Source breakdown:`, sourceBreakdown);
 
-  return sorted;
-}
+//   return sorted;
+// }
 
 // Add this new helper function to identify namespace source types:
 
-function getNamespaceSourceType(namespace) {
-  if (namespace.startsWith('meeting:')) return 'Meeting Transcript';
-  if (namespace.startsWith('web:')) return 'Web Content';
-  if (namespace === 'meeting-assistant') return 'Drive Files';
-  if (namespace === 'web') return 'Web Pages';
-  return 'Other';
-}
+// function getNamespaceSourceType(namespace) {
+//   if (namespace.startsWith('meeting:')) return 'Meeting Transcript';
+//   if (namespace.startsWith('web:')) return 'Web Content';
+//   if (namespace === 'meeting-assistant') return 'Drive Files';
+//   if (namespace === 'web') return 'Web Pages';
+//   return 'Other';
+// }
 
-// Update the performSemanticSearch function to use the enhanced multi-namespace search:
+// // Update the performSemanticSearch function to use the enhanced multi-namespace search:
 
-async function performSemanticSearch(query, documentChunks) {
-  try {
-    console.log(`🔍 Performing enhanced semantic search for: "${query}"`);
-    const queryEmbedding = await generateEmbedding(query);
-    if (!queryEmbedding) {
-      console.warn('Could not generate query embedding, falling back to keyword search');
-      return [];
-    }
+// async function performSemanticSearch(query, documentChunks) {
+//   try {
+//     console.log(`🔍 Performing enhanced semantic search for: "${query}"`);
+//     const queryEmbedding = await generateEmbedding(query);
+//     if (!queryEmbedding) {
+//       console.warn('Could not generate query embedding, falling back to keyword search');
+//       return [];
+//     }
 
-    // Use enhanced backend search across all namespaces
-    try {
-      const serverResults = await pineconeSearchAcrossNamespaces(
-        queryEmbedding,
-        RAG_CONFIG.MAX_RESULTS || 5
-      );
+//     // Use enhanced backend search across all namespaces
+//     try {
+//       const serverResults = await pineconeSearchAcrossNamespaces(
+//         queryEmbedding,
+//         RAG_CONFIG.MAX_RESULTS || 5
+//       );
       
-      if (serverResults.length > 0) {
-        console.log('🎯 Enhanced search found results from multiple sources');
-        return serverResults;
-      }
-    } catch (fetchError) {
-      console.warn('Enhanced backend search failed, using local fallback:', fetchError?.message);
-    }
+//       if (serverResults.length > 0) {
+//         console.log('🎯 Enhanced search found results from multiple sources');
+//         return serverResults;
+//       }
+//     } catch (fetchError) {
+//       console.warn('Enhanced backend search failed, using local fallback:', fetchError?.message);
+//     }
 
-    // Local fallback (existing code)
-    console.log('🔄 Performing local semantic search...');
-    if (!Array.isArray(documentChunks) || documentChunks.length === 0) {
-      console.warn('No document chunks available for local search');
-      return [];
-    }
+//     // Local fallback (existing code)
+//     console.log('🔄 Performing local semantic search...');
+//     if (!Array.isArray(documentChunks) || documentChunks.length === 0) {
+//       console.warn('No document chunks available for local search');
+//       return [];
+//     }
 
-    const results = documentChunks
-      .map(chunk => {
-        if (!chunk.embedding) return null;
-        const similarity = cosineSimilarity(queryEmbedding, chunk.embedding);
-        return {
-          id: chunk.id,
-          filename: chunk.filename,
-          chunkIndex: chunk.chunkIndex,
-          content: chunk.content,
-          similarity,
-          score: similarity * 100,
-          _source: 'Local Files'
-        };
-      })
-      .filter(Boolean)
-      .filter(r => r.similarity >= (RAG_CONFIG.SIMILARITY_THRESHOLD ?? 0.7))
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, RAG_CONFIG.MAX_RESULTS || 5);
+//     const results = documentChunks
+//       .map(chunk => {
+//         if (!chunk.embedding) return null;
+//         const similarity = cosineSimilarity(queryEmbedding, chunk.embedding);
+//         return {
+//           id: chunk.id,
+//           filename: chunk.filename,
+//           chunkIndex: chunk.chunkIndex,
+//           content: chunk.content,
+//           similarity,
+//           score: similarity * 100,
+//           _source: 'Local Files'
+//         };
+//       })
+//       .filter(Boolean)
+//       .filter(r => r.similarity >= (RAG_CONFIG.SIMILARITY_THRESHOLD ?? 0.7))
+//       .sort((a, b) => b.similarity - a.similarity)
+//       .slice(0, RAG_CONFIG.MAX_RESULTS || 5);
 
-    console.log(`✅ Local search found ${results.length} relevant chunks`);
-    return results;
+//     console.log(`✅ Local search found ${results.length} relevant chunks`);
+//     return results;
 
-  } catch (error) {
-    console.error('Error in semantic search:', error);
-    return [];
-  }
-}
+//   } catch (error) {
+//     console.error('Error in semantic search:', error);
+//     return [];
+//   }
+// }
 
-  function buildEnhancedContext(searchResults) {
-  if (!searchResults || searchResults.length === 0) {
-    return "";
-  }
+//   function buildEnhancedContext(searchResults) {
+//   if (!searchResults || searchResults.length === 0) {
+//     return "";
+//   }
 
-  let context = "RELEVANT INFORMATION FROM MULTIPLE SOURCES:\n\n";
+//   let context = "RELEVANT INFORMATION FROM MULTIPLE SOURCES:\n\n";
   
-  searchResults.forEach((result, index) => {
-    const source = result._source || result.filename || 'Unknown Source';
-    const relevanceScore = (result.similarity || result.score / 10 || 0).toFixed(3);
+//   searchResults.forEach((result, index) => {
+//     const source = result._source || result.filename || 'Unknown Source';
+//     const relevanceScore = (result.similarity || result.score / 10 || 0).toFixed(3);
     
-    context += `Source ${index + 1}: ${source}\n`;
-    context += `Relevance Score: ${relevanceScore}\n`;
+//     context += `Source ${index + 1}: ${source}\n`;
+//     context += `Relevance Score: ${relevanceScore}\n`;
     
-    if (result.contexts && result.contexts.length > 0) {
-      context += "Content:\n";
-      result.contexts.forEach(ctx => {
-        context += `"${ctx.text}"\n`;
-      });
-    } else if (result.content) {
-      const preview = result.content.length > 500 
-        ? result.content.substring(0, 500) + "..."
-        : result.content;
-      context += `Content: "${preview}"\n`;
-    }
+//     if (result.contexts && result.contexts.length > 0) {
+//       context += "Content:\n";
+//       result.contexts.forEach(ctx => {
+//         context += `"${ctx.text}"\n`;
+//       });
+//     } else if (result.content) {
+//       const preview = result.content.length > 500 
+//         ? result.content.substring(0, 500) + "..."
+//         : result.content;
+//       context += `Content: "${preview}"\n`;
+//     }
     
-    context += "\n---\n\n";
-  });
+//     context += "\n---\n\n";
+//   });
 
-  return context;
-}
+//   return context;
+// }
 
   // Continue with the rest of your existing code...
   // [The rest of your functions remain the same]
   
-  // Enhanced function to search through all transcript documents with semantic search
-  async function searchTranscriptDocuments(uid, meetingId, query, limit = 5) {
-    try {
-      const transcriptsRef = collection(db, "users", uid, "meetings", meetingId, "transcripts");
-      const snapshot = await getDocs(transcriptsRef);
+  // // Enhanced function to search through all transcript documents with semantic search
+  // async function searchTranscriptDocuments(uid, meetingId, query, limit = 5) {
+  //   try {
+  //     const transcriptsRef = collection(db, "users", uid, "meetings", meetingId, "transcripts");
+  //     const snapshot = await getDocs(transcriptsRef);
       
-      const searchResults = [];
-      const queryLower = query.toLowerCase();
-      let queryWords = queryLower.split(/\s+/).filter(word => word.length > 2);
-      // Expand query words with synonyms to improve keyword matching
-      queryWords = expandQueryWords(queryWords);
+  //     const searchResults = [];
+  //     const queryLower = query.toLowerCase();
+  //     let queryWords = queryLower.split(/\s+/).filter(word => word.length > 2);
+  //     // Expand query words with synonyms to improve keyword matching
+  //     queryWords = expandQueryWords(queryWords);
       
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        const transcript = data.transcript || data.content || "";
-        const transcriptLower = transcript.toLowerCase();
+  //     snapshot.forEach(doc => {
+  //       const data = doc.data();
+  //       const transcript = data.transcript || data.content || "";
+  //       const transcriptLower = transcript.toLowerCase();
 
-        let score = 0;
-        let matchedPhrases = [];
+  //       let score = 0;
+  //       let matchedPhrases = [];
 
-        // Exact and partial keyword matches contribute to the base score
-        if (transcriptLower.includes(queryLower)) {
-          score += 10;
-          matchedPhrases.push(queryLower);
-        }
+  //       // Exact and partial keyword matches contribute to the base score
+  //       if (transcriptLower.includes(queryLower)) {
+  //         score += 10;
+  //         matchedPhrases.push(queryLower);
+  //       }
 
-        queryWords.forEach(word => {
-          const wordCount = (transcriptLower.match(new RegExp(word, 'g')) || []).length;
-          score += wordCount * 2;
-          if (wordCount > 0) matchedPhrases.push(word);
-        });
+  //       queryWords.forEach(word => {
+  //         const wordCount = (transcriptLower.match(new RegExp(word, 'g')) || []).length;
+  //         score += wordCount * 2;
+  //         if (wordCount > 0) matchedPhrases.push(word);
+  //       });
 
-        // Compute fuzzy similarity between the query and the first part of the transcript
-        const fuzzySim = fuzzySimilarity(queryLower, transcriptLower.substring(0, 1000));
-        // Add fuzzy similarity to the score (scaled). Higher similarity increases score.
-        score += fuzzySim * 5;
+  //       // Compute fuzzy similarity between the query and the first part of the transcript
+  //       const fuzzySim = fuzzySimilarity(queryLower, transcriptLower.substring(0, 1000));
+  //       // Add fuzzy similarity to the score (scaled). Higher similarity increases score.
+  //       score += fuzzySim * 5;
 
-        // Apply recency weighting: newer transcripts get a boost
-        const recencyWeight = computeRecencyWeight(data.lastUpdated || data.startTime || data.timestamp);
-        score *= recencyWeight;
+  //       // Apply recency weighting: newer transcripts get a boost
+  //       const recencyWeight = computeRecencyWeight(data.lastUpdated || data.startTime || data.timestamp);
+  //       score *= recencyWeight;
 
-        // Include transcripts if they have a positive score or sufficiently high fuzzy similarity
-        if (score > 0 || fuzzySim >= 0.6) {
-          const contexts = extractRelevantContexts(transcript, queryWords, queryLower);
+  //       // Include transcripts if they have a positive score or sufficiently high fuzzy similarity
+  //       if (score > 0 || fuzzySim >= 0.6) {
+  //         const contexts = extractRelevantContexts(transcript, queryWords, queryLower);
 
-          searchResults.push({
-            docId: doc.id,
-            score: score,
-            transcript: transcript,
-            contexts: contexts,
-            matchedPhrases: matchedPhrases,
-            timestamp: data.startTime || data.timestamp,
-            status: data.status || 'unknown',
-            wordCount: data.wordCount || transcript.split(/\s+/).length
-          });
-        }
-      });
+  //         searchResults.push({
+  //           docId: doc.id,
+  //           score: score,
+  //           transcript: transcript,
+  //           contexts: contexts,
+  //           matchedPhrases: matchedPhrases,
+  //           timestamp: data.startTime || data.timestamp,
+  //           status: data.status || 'unknown',
+  //           wordCount: data.wordCount || transcript.split(/\s+/).length
+  //         });
+  //       }
+  //     });
       
-      return searchResults
-        .sort((a, b) => b.score - a.score)
-        .slice(0, limit);
+  //     return searchResults
+  //       .sort((a, b) => b.score - a.score)
+  //       .slice(0, limit);
         
-    } catch (error) {
-      console.error("Error searching transcript documents:", error);
-      return [];
-    }
-  }
+  //   } catch (error) {
+  //     console.error("Error searching transcript documents:", error);
+  //     return [];
+  //   }
+  // }
 
   // Extract relevant context around search terms
-  function extractRelevantContexts(transcript, queryWords, fullQuery, contextSize = 150) {
-    const contexts = [];
-    const sentences = transcript.split(/[.!?]+/).filter(s => s.trim().length > 10);
+  // function extractRelevantContexts(transcript, queryWords, fullQuery, contextSize = 150) {
+  //   const contexts = [];
+  //   const sentences = transcript.split(/[.!?]+/).filter(s => s.trim().length > 10);
     
-    if (fullQuery.length > 3) {
-      sentences.forEach((sentence, index) => {
-        if (sentence.toLowerCase().includes(fullQuery)) {
-          const start = Math.max(0, index - 1);
-          const end = Math.min(sentences.length, index + 2);
-          const context = sentences.slice(start, end).join('. ').trim();
-          if (context.length > 20) {
-            contexts.push({
-              text: context,
-              relevance: 10,
-              type: 'exact_match'
-            });
-          }
-        }
-      });
-    }
+  //   if (fullQuery.length > 3) {
+  //     sentences.forEach((sentence, index) => {
+  //       if (sentence.toLowerCase().includes(fullQuery)) {
+  //         const start = Math.max(0, index - 1);
+  //         const end = Math.min(sentences.length, index + 2);
+  //         const context = sentences.slice(start, end).join('. ').trim();
+  //         if (context.length > 20) {
+  //           contexts.push({
+  //             text: context,
+  //             relevance: 10,
+  //             type: 'exact_match'
+  //           });
+  //         }
+  //       }
+  //     });
+  //   }
     
-    sentences.forEach((sentence, index) => {
-      const sentenceLower = sentence.toLowerCase();
-      const matchedWords = queryWords.filter(word => sentenceLower.includes(word));
+  //   sentences.forEach((sentence, index) => {
+  //     const sentenceLower = sentence.toLowerCase();
+  //     const matchedWords = queryWords.filter(word => sentenceLower.includes(word));
       
-      if (matchedWords.length >= Math.min(2, queryWords.length)) {
-        const start = Math.max(0, index - 1);
-        const end = Math.min(sentences.length, index + 2);
-        const context = sentences.slice(start, end).join('. ').trim();
+  //     if (matchedWords.length >= Math.min(2, queryWords.length)) {
+  //       const start = Math.max(0, index - 1);
+  //       const end = Math.min(sentences.length, index + 2);
+  //       const context = sentences.slice(start, end).join('. ').trim();
         
-        if (context.length > 20 && !contexts.some(c => c.text === context)) {
-          contexts.push({
-            text: context,
-            relevance: matchedWords.length,
-            type: 'multi_word_match',
-            matchedWords: matchedWords
-          });
-        }
-      }
-    });
+  //       if (context.length > 20 && !contexts.some(c => c.text === context)) {
+  //         contexts.push({
+  //           text: context,
+  //           relevance: matchedWords.length,
+  //           type: 'multi_word_match',
+  //           matchedWords: matchedWords
+  //         });
+  //       }
+  //     }
+  //   });
     
-    return contexts
-      .sort((a, b) => b.relevance - a.relevance)
-      .slice(0, 3)
-      .map(context => ({
-        ...context,
-        text: context.text.length > contextSize 
-          ? context.text.substring(0, contextSize) + "..."
-          : context.text
-      }));
-  }
+  //   return contexts
+  //     .sort((a, b) => b.relevance - a.relevance)
+  //     .slice(0, 3)
+  //     .map(context => ({
+  //       ...context,
+  //       text: context.text.length > contextSize 
+  //         ? context.text.substring(0, contextSize) + "..."
+  //         : context.text
+  //     }));
+  // }
 
 // =============================
 // Additional helper functions for enhanced search
@@ -994,16 +994,18 @@ const SYNONYMS_MAP = {
 // Expand an array of query words by adding synonyms defined in SYNONYMS_MAP. The
 // returned array is deduplicated so that each term appears only once. This helps
 // the keyword search portion of the algorithm match more relevant content.
-function expandQueryWords(words) {
-  const expanded = new Set(words);
-  words.forEach(word => {
-    const synonyms = SYNONYMS_MAP[word];
-    if (synonyms && Array.isArray(synonyms)) {
-      synonyms.forEach(syn => expanded.add(syn));
-    }
-  });
-  return Array.from(expanded);
-}
+
+
+// function expandQueryWords(words) {
+//   const expanded = new Set(words);
+//   words.forEach(word => {
+//     const synonyms = SYNONYMS_MAP[word];
+//     if (synonyms && Array.isArray(synonyms)) {
+//       synonyms.forEach(syn => expanded.add(syn));
+//     }
+//   });
+//   return Array.from(expanded);
+// }
 
   function cleanTextForSpeech(text) {
     return text
@@ -1119,54 +1121,54 @@ function analyzeQuestionIntent(query) {
   return 'general';
 }
 
-  function detectExplicitFileOrTranscriptMention(query) {
-    const lower = query.toLowerCase();
+  // function detectExplicitFileOrTranscriptMention(query) {
+  //   const lower = query.toLowerCase();
 
-    const mentionsSpecificFile = /\b[\w\s-]+\.(docx?|pdf|txt|csv|md|pptx)\b/i.test(lower);
-    const mentionsTranscriptOnly = /\b(transcript|meeting|conversation|call|session)\b/i.test(lower);
+  //   const mentionsSpecificFile = /\b[\w\s-]+\.(docx?|pdf|txt|csv|md|pptx)\b/i.test(lower);
+  //   const mentionsTranscriptOnly = /\b(transcript|meeting|conversation|call|session)\b/i.test(lower);
 
-    return {
-      mentionsSpecificFile,
-      mentionsTranscriptOnly
-    };
-  }
+  //   return {
+  //     mentionsSpecificFile,
+  //     mentionsTranscriptOnly
+  //   };
+  // }
 
-  function needsTranscriptSearch(query) {
-    const intent = analyzeQuestionIntent(query);
-    return intent === 'meeting_transcript';
-  }
+  // function needsTranscriptSearch(query) {
+  //   const intent = analyzeQuestionIntent(query);
+  //   return intent === 'meeting_transcript';
+  // }
 
-  function needsDriveAccess(query) {
-    const intent = analyzeQuestionIntent(query);
-    return ['drive_files', 'file_content', 'search_files', 'file_search'].includes(intent);
-  }
-
-  
+  // function needsDriveAccess(query) {
+  //   const intent = analyzeQuestionIntent(query);
+  //   return ['drive_files', 'file_content', 'search_files', 'file_search'].includes(intent);
+  // }
 
   
 
-  function categorizeQuestion(query) {
-    const categories = {
-      'decision': ['decide', 'decided', 'resolution', 'concluded', 'agreed', 'consensus'],
-      'action_item': ['action', 'next steps', 'follow up', 'todo', 'task', 'assign'],
-      'person_specific': ['who said', 'who mentioned', 'person said', 'someone said'],
-      'topic_discussion': ['discuss', 'talk about', 'mention', 'bring up', 'address'],
-      'timeline': ['when', 'time', 'date', 'schedule', 'deadline'],
-      'opinion': ['think', 'opinion', 'believe', 'feel', 'thought'],
-      'explanation': ['explain', 'how', 'why', 'what is', 'definition'],
-      'summary': ['summary', 'overview', 'main points', 'key points', 'recap'],
-      'file_operation': ['file', 'document', 'drive', 'folder', 'content'],
-      'search': ['find', 'search', 'look for', 'locate']
-    };
+  
+
+  // function categorizeQuestion(query) {
+  //   const categories = {
+  //     'decision': ['decide', 'decided', 'resolution', 'concluded', 'agreed', 'consensus'],
+  //     'action_item': ['action', 'next steps', 'follow up', 'todo', 'task', 'assign'],
+  //     'person_specific': ['who said', 'who mentioned', 'person said', 'someone said'],
+  //     'topic_discussion': ['discuss', 'talk about', 'mention', 'bring up', 'address'],
+  //     'timeline': ['when', 'time', 'date', 'schedule', 'deadline'],
+  //     'opinion': ['think', 'opinion', 'believe', 'feel', 'thought'],
+  //     'explanation': ['explain', 'how', 'why', 'what is', 'definition'],
+  //     'summary': ['summary', 'overview', 'main points', 'key points', 'recap'],
+  //     'file_operation': ['file', 'document', 'drive', 'folder', 'content'],
+  //     'search': ['find', 'search', 'look for', 'locate']
+  //   };
     
-    const queryLower = query.toLowerCase();
-    for (const [category, keywords] of Object.entries(categories)) {
-      if (keywords.some(keyword => queryLower.includes(keyword))) {
-        return category;
-      }
-    }
-    return 'general';
-  }
+  //   const queryLower = query.toLowerCase();
+  //   for (const [category, keywords] of Object.entries(categories)) {
+  //     if (keywords.some(keyword => queryLower.includes(keyword))) {
+  //       return category;
+  //     }
+  //   }
+  //   return 'general';
+  // }
 
 // ENHANCED AI RESPONSE FUNCTION WITH INTELLIGENT SOURCE PRIORITIZATION
 async function getRAGResponseWithContext(input, selectedMeeting, userUid, filesContentMap, getAIResponse) {
@@ -1234,6 +1236,7 @@ async function getRAGResponseWithContext(input, selectedMeeting, userUid, filesC
     
     let transcriptResults = [];
     let documentResults = [];
+    let webScrapResults = [];
     
     try {
       // Search transcript first
@@ -1257,9 +1260,11 @@ async function getRAGResponseWithContext(input, selectedMeeting, userUid, filesC
       
       // Search documents
       documentResults = await performRAGSearch(input); // default namespace
+      webScrapResults = await performRAGSearch(input, `meeting:${selectedMeeting.meetingId}`);
+
       
       // Build combined context
-      if (transcriptResults.length > 0 || documentResults.length > 0) {
+      if (transcriptResults.length > 0 || documentResults.length > 0 || webScrapResults > 0) {
         context = "";
         let sources = [];
         
@@ -1280,10 +1285,20 @@ async function getRAGResponseWithContext(input, selectedMeeting, userUid, filesC
           });
           sources.push("Google Drive Files");
         }
+
+        if (webScrapResults.length > 0) {
+          context += "Web Scraped CONTEXT:\n\n";
+          webScrapResults.forEach((result, index) => {
+            context += `Content: "${result.content}"\n\n`;
+          });
+          sources.push("Web Scraped Data");
+        }
         
-        searchResults = [...transcriptResults, ...documentResults];
+        
+        searchResults = [...transcriptResults, ...documentResults,...webScrapResults];
         sourceInfo = `Sources: ${sources.join(" + ")}`;
       }
+
       
     } catch (error) {
       console.warn("Error in combined search:", error);
@@ -1439,15 +1454,16 @@ function analyzeSourceIntent(query) {
 }
 
 // Helper function to build document context (simplified)
-function buildDocumentContext(ragResults) {
-  let context = "RELEVANT DOCUMENTS:\n\n";
-  ragResults.forEach((result, index) => {
-    context += `Document ${index + 1}: ${result.filename}\n`;
-    context += `Relevance: ${result.similarity.toFixed(3)}\n`;
-    context += `Content: "${result.content}"\n\n`;
-  });
-  return context;
-}
+
+// function buildDocumentContext(ragResults) {
+//   let context = "RELEVANT DOCUMENTS:\n\n";
+//   ragResults.forEach((result, index) => {
+//     context += `Document ${index + 1}: ${result.filename}\n`;
+//     context += `Relevance: ${result.similarity.toFixed(3)}\n`;
+//     context += `Content: "${result.content}"\n\n`;
+//   });
+//   return context;
+// }
 
 function highlightSearchTerms(text, searchTerms) {
   if (!searchTerms || searchTerms.length === 0) return text;
@@ -1463,17 +1479,17 @@ function highlightSearchTerms(text, searchTerms) {
 }
 
 
-  function getMeetingStatus(meetingDateStr) {
-    const today = new Date();
-    const meetingDate = new Date(meetingDateStr);
+  // function getMeetingStatus(meetingDateStr) {
+  //   const today = new Date();
+  //   const meetingDate = new Date(meetingDateStr);
 
-    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const meetingOnly = new Date(meetingDate.getFullYear(), meetingDate.getMonth(), meetingDate.getDate());
+  //   const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  //   const meetingOnly = new Date(meetingDate.getFullYear(), meetingDate.getMonth(), meetingDate.getDate());
 
-    if (meetingOnly.getTime() === todayOnly.getTime()) return "today";
-    if (meetingOnly < todayOnly) return "in the past";
-    return "upcoming";
-  }
+  //   if (meetingOnly.getTime() === todayOnly.getTime()) return "today";
+  //   if (meetingOnly < todayOnly) return "in the past";
+  //   return "upcoming";
+  // }
 
   // Helper functions for Drive API
   function extractFolderId(driveUrl) {
@@ -1909,30 +1925,30 @@ function highlightSearchTerms(text, searchTerms) {
     return matches;
   }
 
-  // Clear cache function (call this when you want to force refresh)
-  async function clearDriveCache(folderId = null) {
-    try {
-      if (folderId) {
-        // Clear cache for specific folder
-        const cacheKey = `drive_files_${folderId}`;
-        const cacheTimeKey = `drive_files_time_${folderId}`;
-        await chrome.storage.local.remove([cacheKey, cacheTimeKey]);
-        console.log(`🗑️ Cleared cache for folder ${folderId}`);
-      } else {
-        // Clear all drive caches
-        const allData = await chrome.storage.local.get();
-        const keysToRemove = Object.keys(allData).filter(key => 
-          key.startsWith('drive_files_') || key.startsWith('drive_files_time_')
-        );
-        if (keysToRemove.length > 0) {
-          await chrome.storage.local.remove(keysToRemove);
-          console.log(`🗑️ Cleared ${keysToRemove.length} drive cache entries`);
-        }
-      }
-    } catch (error) {
-      console.error('Error clearing cache:', error);
-    }
-  }
+  // // Clear cache function (call this when you want to force refresh)
+  // async function clearDriveCache(folderId = null) {
+  //   try {
+  //     if (folderId) {
+  //       // Clear cache for specific folder
+  //       const cacheKey = `drive_files_${folderId}`;
+  //       const cacheTimeKey = `drive_files_time_${folderId}`;
+  //       await chrome.storage.local.remove([cacheKey, cacheTimeKey]);
+  //       console.log(`🗑️ Cleared cache for folder ${folderId}`);
+  //     } else {
+  //       // Clear all drive caches
+  //       const allData = await chrome.storage.local.get();
+  //       const keysToRemove = Object.keys(allData).filter(key => 
+  //         key.startsWith('drive_files_') || key.startsWith('drive_files_time_')
+  //       );
+  //       if (keysToRemove.length > 0) {
+  //         await chrome.storage.local.remove(keysToRemove);
+  //         console.log(`🗑️ Cleared ${keysToRemove.length} drive cache entries`);
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error('Error clearing cache:', error);
+  //   }
+  // }
 
   // Chat message functions
   async function saveChatMessage(uid, meetingId, role, content) {
@@ -2550,82 +2566,82 @@ async function handleDriveFilesQuery(input, aiBubble) {
       }
     }
 
-    // Handle general queries with enhanced semantic search
-    async function handleGeneralQueryWithSemantics(input, aiBubble) {
-      aiBubble.innerHTML = '<div class="typing-indicator">🧠 Thinking with semantic search...</div>';
+   
+    // async function handleGeneralQueryWithSemantics(input, aiBubble) {
+    //   aiBubble.innerHTML = '<div class="typing-indicator">🧠 Thinking with semantic search...</div>';
 
-      // Load additional files if needed
-      await ensureFilesLoaded();
+    //   // Load additional files if needed
+    //   await ensureFilesLoaded();
 
-      try {
-        // Use the enhanced AI response function with semantic search
-        const enhancedResponse = await getEnhancedAIResponseWithSemantics(
-          input, selectedMeeting, userUid, filesContentMap, getAIResponse
-        );
+    //   try {
+    //     // Use the enhanced AI response function with semantic search
+    //     const enhancedResponse = await getEnhancedAIResponseWithSemantics(
+    //       input, selectedMeeting, userUid, filesContentMap, getAIResponse
+    //     );
 
-        // Display the AI response with highlighting
-        const responseText = highlightSearchTerms(enhancedResponse.response, enhancedResponse.searchTerms);
-        aiBubble.innerHTML = linkify(responseText);
+    //     // Display the AI response with highlighting
+    //     const responseText = highlightSearchTerms(enhancedResponse.response, enhancedResponse.searchTerms);
+    //     aiBubble.innerHTML = linkify(responseText);
 
-        // Add enhanced context indicators
-        const indicators = [];
-        if (enhancedResponse.hasSemanticResults) {
-          indicators.push(`🧠 Semantic (${enhancedResponse.searchResults.semanticResults?.length || 0} matches)`);
-        }
-        if (enhancedResponse.hasKeywordResults) {
-          indicators.push(`🔍 Keyword (${enhancedResponse.searchResults.keywordResults?.length || 0} matches)`);
-        }
-        if (enhancedResponse.hasTranscriptContext) {
-          indicators.push(`📝 Transcript`);
-        }
+    //     // Add enhanced context indicators
+    //     const indicators = [];
+    //     if (enhancedResponse.hasSemanticResults) {
+    //       indicators.push(`🧠 Semantic (${enhancedResponse.searchResults.semanticResults?.length || 0} matches)`);
+    //     }
+    //     if (enhancedResponse.hasKeywordResults) {
+    //       indicators.push(`🔍 Keyword (${enhancedResponse.searchResults.keywordResults?.length || 0} matches)`);
+    //     }
+    //     if (enhancedResponse.hasTranscriptContext) {
+    //       indicators.push(`📝 Transcript`);
+    //     }
 
-        if (indicators.length > 0) {
-          const contextInfo = document.createElement("div");
-          contextInfo.className = "context-info";
-          contextInfo.style.cssText = `
-            font-size: 0.8em; 
-            color: #666; 
-            margin-top: 8px; 
-            padding: 6px 10px; 
-            background: linear-gradient(135deg, #f0f8ff, #e6f3ff); 
-            border-radius: 12px; 
-            border-left: 3px solid #4CAF50;
-            font-style: italic;
-          `;
+    //     if (indicators.length > 0) {
+    //       const contextInfo = document.createElement("div");
+    //       contextInfo.className = "context-info";
+    //       contextInfo.style.cssText = `
+    //         font-size: 0.8em; 
+    //         color: #666; 
+    //         margin-top: 8px; 
+    //         padding: 6px 10px; 
+    //         background: linear-gradient(135deg, #f0f8ff, #e6f3ff); 
+    //         border-radius: 12px; 
+    //         border-left: 3px solid #4CAF50;
+    //         font-style: italic;
+    //       `;
           
-          const semanticScore = enhancedResponse.semanticScore > 0 
-            ? ` • Relevance: ${(enhancedResponse.semanticScore * 100).toFixed(1)}%` 
-            : '';
+    //       const semanticScore = enhancedResponse.semanticScore > 0 
+    //         ? ` • Relevance: ${(enhancedResponse.semanticScore * 100).toFixed(1)}%` 
+    //         : '';
           
-          contextInfo.innerHTML = `✨ ${indicators.join(' • ')} • Intent: ${enhancedResponse.questionIntent}${semanticScore}`;
-          aiBubble.appendChild(contextInfo);
-        }
+    //       contextInfo.innerHTML = `✨ ${indicators.join(' • ')} • Intent: ${enhancedResponse.questionIntent}${semanticScore}`;
+    //       aiBubble.appendChild(contextInfo);
+    //     }
 
-        if (userUid && selectedMeeting.meetingId) {
-          saveChatMessage(userUid, selectedMeeting.meetingId, "assistant", enhancedResponse.response);
-        }
+    //     if (userUid && selectedMeeting.meetingId) {
+    //       saveChatMessage(userUid, selectedMeeting.meetingId, "assistant", enhancedResponse.response);
+    //     }
 
-        // Voice response if enabled
-        if (voiceReplyToggle && voiceReplyToggle.checked && synth) {
-          speakResponse(enhancedResponse.response);
-        }
+    //     // Voice response if enabled
+    //     if (voiceReplyToggle && voiceReplyToggle.checked && synth) {
+    //       speakResponse(enhancedResponse.response);
+    //     }
 
-      } catch (error) {
-        console.error("AI response error:", error);
-        aiBubble.innerHTML = "⚠️ Failed to get AI response. Please try again.";
-      }
-    }
+    //   } catch (error) {
+    //     console.error("AI response error:", error);
+    //     aiBubble.innerHTML = "⚠️ Failed to get AI response. Please try again.";
+    //   }
+    // }
 
-    // Helper functions
-    function getFileTypeCategory(mimeType) {
-      if (mimeType.includes('document')) return 'Documents';
-      if (mimeType.includes('spreadsheet')) return 'Spreadsheets';
-      if (mimeType.includes('presentation')) return 'Presentations';
-      if (mimeType.includes('text')) return 'Text Files';
-      if (mimeType.includes('image')) return 'Images';
-      if (mimeType.includes('pdf')) return 'PDFs';
-      return 'Other Files';
-    }
+    // // Helper functions
+    // function getFileTypeCategory(mimeType) {
+    //   if (mimeType.includes('document')) return 'Documents';
+    //   if (mimeType.includes('spreadsheet')) return 'Spreadsheets';
+    //   if (mimeType.includes('presentation')) return 'Presentations';
+    //   if (mimeType.includes('text')) return 'Text Files';
+    //   if (mimeType.includes('image')) return 'Images';
+    //   if (mimeType.includes('pdf')) return 'PDFs';
+    //   return 'Other Files';
+    // }
 
     function extractSearchKeyword(input) {
       const patterns = [
