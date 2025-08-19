@@ -653,8 +653,8 @@ async function getRAGResponseWithContext(input, selectedMeeting, userUid, filesC
     try {
       documentResults =
         queryEmbedding
-          ? await performRAGSearchWithEmbedding(queryEmbedding, undefined, { signal }) // default/doc namespace
-          : await performRAGSearch(input, undefined, { signal }); // fallback
+          ? await performRAGSearchWithEmbedding(queryEmbedding, 'meeting-assistant', { signal }) // default/doc namespace
+          : await performRAGSearch(input, 'meeting-assistant', { signal }); // fallback
 
       if (documentResults.length > 0) {
         context = "GOOGLE DRIVE FILES CONTEXT:\n\n";
@@ -693,9 +693,9 @@ async function getRAGResponseWithContext(input, selectedMeeting, userUid, filesC
 
       // default/doc namespace
       if (queryEmbedding) {
-        searches.push(performRAGSearchWithEmbedding(queryEmbedding, undefined, { signal }));
+        searches.push(performRAGSearchWithEmbedding(queryEmbedding, 'meeting-assistant', { signal }));
       } else {
-        searches.push(performRAGSearch(input, undefined, { signal }));
+        searches.push(performRAGSearch(input, 'meeting-assistant', { signal }));
       }
 
       // transcript namespace (raw meetingId)
