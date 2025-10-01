@@ -13,7 +13,7 @@ import {
 
 const RAG_CONFIG = {
   SERVER_URL: 'http://localhost:3000',
-  OPENAI_KEY: ``,
+  GEMINI_KEY: '',
   MAX_RESULTS: 5,
   SIMILARITY_THRESHOLD: 0.7
 };
@@ -88,27 +88,28 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * Generate embeddings using OpenAI API
    */
-  async function generateEmbedding(text) {
+ async function generateEmbedding(text) {
   try {
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': ``
-      },
-      body: JSON.stringify({
-        input: text.substring(0, 8000),
-        model: 'text-embedding-3-small',
-        dimensions: 1024
-      })
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${RAG_CONFIG.GEMINI_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'text-embedding-004',
+          content: {
+            parts: [{ text: text.substring(0, 8000) }]
+          }
+        })
+      }
+    );
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+      throw new Error(`Gemini API error: ${response.status}`);
     }
 
     const data = await response.json();
-    return data.data[0].embedding;
+    return data.embedding?.values;
   } catch (error) {
     console.error('Error generating embedding:', error);
     return null;
@@ -141,7 +142,7 @@ async function uploadChunksToPinecone(chunks, filename) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        namespace: 'meeting-assistant',
+        namespace: 'siat',
         vectors
       }),
       signal: AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined
@@ -379,12 +380,12 @@ function getActiveNamespaces() {
   }
   
   // 3. Default document namespace
-  list.push('meeting-assistant');
+  list.push('siat');
   
   // 4. Generic web namespace (for scraped pages not tied to specific meetings)
   list.push('web');
   
-  console.log(`🎯 Active namespaces: ${list.join(', ')}`);
+  console.log(`Active namespaces: ${list.join(', ')}`);
   return list;
 }
 
@@ -655,7 +656,6 @@ async function getRAGResponseWithContext(input, selectedMeeting, userUid, filesC
         queryEmbedding
           ? await performRAGSearchWithEmbedding(queryEmbedding, 'meeting-assistant', { signal }) // default/doc namespace
           : await performRAGSearch(input, 'meeting-assistant', { signal }); // fallback
-
       if (documentResults.length > 0) {
         context = "GOOGLE DRIVE FILES CONTEXT:\n\n";
         documentResults.forEach((result, index) => {

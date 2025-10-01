@@ -41,11 +41,11 @@ app.use(bodyParser.json({ limit: '50mb' }));
 const PINECONE_CONFIG = {
   apiKey: 'pcsk_3UyAU4_DjATBcf1jUfGp7n3EFTFDDZqYYu1eQK8k8dky7J4QpkpBRVjk1P9D84iGDKX6yy',
   environment: 'us-east-1',
-  indexName: 'meeting-assistant',
-  baseUrl: 'https://llama-text-embed-v2-index-9rlp3c2.svc.aped-4627-b74a.pinecone.io'
+  indexName: 'siat',
+  baseUrl: 'https://siat-9rlp3c2.svc.aped-4627-b74a.pinecone.io'
 };
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const SERP_API_KEY = process.env.SERP_API_KEY || '';
 
 // --- Helpers ---
@@ -75,30 +75,35 @@ function vectorIdFor(url, idx) {
 
 async function getEmbedding(text) {
   const body = {
-    model: 'text-embedding-3-small',
-    input: text.slice(0, 8000),
-    dimensions: 1024
+    model: 'text-embedding-004',
+    content: {
+      parts: [{ text: text.slice(0, 8000) }]
+    }
   };
   let tries = 0;
   while (tries < 3) {
     tries++;
-    const resp = await fetchWithTimeout('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify(body)
-    }, 25000);
+    const resp = await fetchWithTimeout(
+      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }, 
+      25000
+    );
     if (resp.ok) {
       const data = await resp.json();
-      return data.data?.[0]?.embedding;
+      return data.embedding?.values;
     }
     if (resp.status === 429 || resp.status >= 500) {
       await new Promise(r => setTimeout(r, 400 * Math.pow(2, tries) + Math.random() * 200));
       continue;
     }
     const errText = await resp.text().catch(() => '');
-    throw new Error(`OpenAI embeddings failed: ${resp.status} ${errText}`);
+    throw new Error(`Gemini embeddings failed: ${resp.status} ${errText}`);
   }
-  throw new Error('OpenAI embeddings failed after retries');
+  throw new Error('Gemini embeddings failed after retries');
 }
 
 // --- Health ---

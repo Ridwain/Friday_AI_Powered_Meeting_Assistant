@@ -10,41 +10,42 @@ const transcriptionBtn = document.getElementById("transcriptionBtn");
 
 // Real‑time transcript embedding and upsert helpers
 const REALTIME_PINECONE_URL = 'http://localhost:3000/upsert';
-const OPENAI_KEY = '';
+const GEMINI_KEY = '';
 
 async function generateRealtimeEmbedding(text) {
   try {
     if (!text || text.trim().length < 10) {
-      console.log('⏭️ Text too short for embedding, skipping');
+      console.log('Text too short for embedding, skipping');
       return null;
     }
 
     const input = text.length > 8000 ? text.slice(-8000) : text;
-    console.log(`🔄 Generating embedding for text: "${input.substring(0, 100)}..."`);
+    console.log(`Generating embedding for text: "${input.substring(0, 100)}..."`);
 
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_KEY}`
-      },
-      body: JSON.stringify({
-        input,
-        model: 'text-embedding-3-small',
-        dimensions: 1024
-      })
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'text-embedding-004',
+          content: {
+            parts: [{ text: input }]
+          }
+        })
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    console.log('✅ Successfully generated embedding');
-    return data.data[0].embedding;
+    console.log('Successfully generated embedding');
+    return data.embedding?.values;
   } catch (err) {
-    console.error('❌ generateRealtimeEmbedding error:', err);
+    console.error('generateRealtimeEmbedding error:', err);
     return null;
   }
 }
