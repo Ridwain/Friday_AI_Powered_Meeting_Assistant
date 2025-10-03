@@ -17,6 +17,9 @@ const RAG_CONFIG = {
   MAX_RESULTS: 5,
   SIMILARITY_THRESHOLD: 0.7
 };
+// latency knobs
+const SEARCH_TIMEOUT_MS = 1500;   // per-namespace hard timeout
+const FAST_HIT_THRESHOLD = 0.88;  // short-circuit if one hit is very strong
 
 let conversationHistory = [];
 const MAX_CONVERSATION_HISTORY = 10;
@@ -255,6 +258,125 @@ async function performRAGSearchWithEmbedding(queryEmbedding, namespace, opts = {
   if (!res.ok) throw new Error(`Search failed: ${res.status}`);
   return res.json();
 }
+
+// ==== RAG BRAIN: Anti-Copy Pipeline ====
+function extractKeywords(question, k = 10) {
+  const terms = String(question || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+  const stop = new Set(['the','is','are','a','an','of','and','in','to','about','on','for','with','who','what','when','where','why','how','tell','me']);
+  const freq = new Map();
+  for (const t of terms) if (!stop.has(t)) freq.set(t, (freq.get(t) || 0) + 1);
+  return [...freq.entries()].sort((a,b)=>b[1]-a[1]).slice(0,k).map(x=>x[0]);
+}
+
+function sentenceSplit(text) {
+  return String(text||'').split(/(?<=[.!?])\s+/).filter(Boolean);
+}
+
+function trimHitToQuestion(hit, question) {
+  const raw = hit?.content || hit?.metadata?.text || hit?.text || '';
+  if (!raw) return null;
+  const keywords = extractKeywords(question, 12);
+  const sents = sentenceSplit(raw);
+  const scored = sents.map(s => {
+    const ls = s.toLowerCase();
+    let score = 0;
+    for (const kw of keywords) if (ls.includes(kw)) score++;
+    return { s, score };
+  });
+  const kept = scored.sort((a,b)=>b.score-a.score).slice(0, Math.max(2, Math.min(6, scored.length))).map(x=>x.s);
+  const text = kept.join(' ');
+  return text ? { ...hit, text } : null;
+}
+
+function dedupHits(hits) {
+  const seen = new Set(); 
+  const out = [];
+  for (const h of hits) {
+    const key = (h.metadata?.filename || h.filename || h.source || 'unknown') + '|' + (h.text || h.content || '').slice(0,160);
+    if (!seen.has(key)) { 
+      seen.add(key); 
+      out.push(h); 
+    }
+  }
+  return out;
+}
+
+function tagBestSnippets(hits, max = 12) {
+  if (!Array.isArray(hits)) return [];
+  // ensure we keep only unique, best-scoring snippets
+  const deduped = dedupHits(hits).sort((a, b) => (b.score || 0) - (a.score || 0));
+  return deduped.slice(0, Math.min(max, deduped.length)).map((h, i) => ({
+    tag: `T${i + 1}`,
+    text: h.text || h.content || h?.metadata?.text || '',
+    source: h.source || h?.metadata?.filename || h.filename || 'Document',
+    score: h.score ?? h.similarity ?? 0
+  }));
+}
+
+async function compressSnippetsWithLLM(question, taggedSnips, getAIResponse) {
+  const content = [
+    { role: 'system', content:
+`You are a careful research assistant. Read the tagged snippets and extract only statements that directly answer the question.
+Rules:
+- Write 5–8 concise bullets in your own words (no long quotes).
+- Preserve important numbers/dates/names.
+- Each bullet must include the tag(s) you used, e.g., [#T2] or [#T1][#T4].
+- If snippets contradict, mention the discrepancy briefly.` },
+    { role: 'user', content:
+`Question: ${question}
+
+Tagged snippets:
+${taggedSnips.map(s => `[#${s.tag}] ${s.text}\n— source: ${s.source}`).join('\n\n')}
+
+Return ONLY the bullet points.` }
+  ];
+  const summary = await getAIResponse(content);
+  return summary;
+}
+const FHT = (typeof FAST_HIT_THRESHOLD === 'number') ? FAST_HIT_THRESHOLD : 0.88;
+
+async function getGroundedAnswer(userQuestion, rawMatches, getAIResponse) {
+  const hits = (rawMatches || [])
+    .filter(h => h && (h.content || h.metadata?.text || h.text))
+    .map((h, i) => ({
+      id: h.id || `H${i+1}`,
+      score: h.score ?? h.similarity ?? 0,
+      source: h.metadata?.filename || h.filename || h.source || 'Document',
+      text: h.content || h.metadata?.text || h.text
+    }))
+    .map(h => trimHitToQuestion(h, userQuestion))
+    .filter(Boolean);
+
+  // short-circuit: if we have one super-strong hit, answer from that only
+  const best = hits.reduce((a,b)=> (b.score > (a?.score ?? -1) ? b : a), null);
+  const chosen = (best && best.score >= FHT) ? [best] : hits;
+
+
+  // clip each snippet to keep the prompt lean
+  const snippet = (t, n=450) => (t.length > n ? t.slice(0, n) + '…' : t);
+  const tagged = tagBestSnippets(chosen);
+  const packed = tagged.map(s => `[#${s.tag}] ${snippet(s.text)} — ${s.source}`).join('\n\n');
+
+  const prompt = [
+    { role: 'system', content:
+`You are a precise assistant. Answer ONLY from the tagged snippets.
+- Keep it concise .
+- Do NOT include any citations, tags, or bracketed references like [#T1] or [#T1, #T2].
+- If snippets conflict, resolve quietly; do not mention tags.` 
+},
+    { role: 'user', content:
+`Question: ${userQuestion}
+
+Tagged snippets:
+${packed}
+
+Answer:` }
+  ];
+
+  const answer = await getAIResponse(prompt);
+  return { answer, hasEvidence: tagged.length > 0, sources: tagged };
+ }
+// ==== END RAG BRAIN ====
 
 
 
@@ -587,7 +709,10 @@ function analyzeQuestionIntent(query) {
 // ENHANCED AI RESPONSE FUNCTION WITH INTELLIGENT SOURCE PRIORITIZATION
 async function getRAGResponseWithContext(input, selectedMeeting, userUid, filesContentMap, getAIResponse) {
   console.log(`🤖 Processing RAG query with context: ${input}`);
-
+  // Always initialize to empty arrays so spread/concat never crash
+  let documentResults = [];
+  let transcriptResults = [];
+  let webScrapResults = [];
   // Cancel any previous question's in-flight searches, then create ONE controller for this question
   abortActiveSearch();
   activeSearchAborter = new AbortController();
@@ -614,7 +739,7 @@ async function getRAGResponseWithContext(input, selectedMeeting, userUid, filesC
     console.log("📝 User explicitly requested transcript information");
 
     try {
-      const transcriptResults =
+      transcriptResults =
         queryEmbedding && selectedMeeting?.meetingId
           ? await performRAGSearchWithEmbedding(queryEmbedding, selectedMeeting.meetingId, { signal })
           : await performRAGSearch(input, selectedMeeting?.meetingId, { signal }); // fallback
@@ -650,7 +775,7 @@ async function getRAGResponseWithContext(input, selectedMeeting, userUid, filesC
     // 2B. User explicitly mentioned files/drive - ONLY search documents
     console.log("📁 User explicitly requested file information");
 
-    let documentResults = [];
+    
     try {
       documentResults =
         queryEmbedding
@@ -683,9 +808,6 @@ async function getRAGResponseWithContext(input, selectedMeeting, userUid, filesC
     // 2C. No explicit source mentioned - search BOTH (and web-scraped namespace), in PARALLEL
     console.log("🔍 No explicit source mentioned, searching both transcript and files");
 
-    let transcriptResults = [];
-    let documentResults = [];
-    let webScrapResults = [];
 
     try {
       // Build the search fan-out with one embedding; pass the SAME signal to all
@@ -728,17 +850,17 @@ async function getRAGResponseWithContext(input, selectedMeeting, userUid, filesC
       webScrapResults = webRes || [];
 
       // Fallback to full transcript if transcript search empty
-      if (transcriptResults.length === 0 && selectedMeeting?.meetingId) {
-        const transcript = await loadTranscript(userUid, selectedMeeting.meetingId);
-        if (transcript && transcript.length > 0) {
-          transcriptResults = [{
-            content: transcript.substring(0, 2000),
-            similarity: 0.5,
-            filename: "Meeting Transcript",
-            source: "transcript"
-          }];
-        }
-      }
+      // if (transcriptResults.length === 0 && selectedMeeting?.meetingId) {
+      //   const transcript = await loadTranscript(userUid, selectedMeeting.meetingId);
+      //   if (transcript && transcript.length > 0) {
+      //     transcriptResults = [{
+      //       content: transcript.substring(0, 2000),
+      //       similarity: 0.5,
+      //       filename: "Meeting Transcript",
+      //       source: "transcript"
+      //     }];
+      //   }
+      // }
 
       // Build combined context
       if (transcriptResults.length > 0 || documentResults.length > 0 || webScrapResults.length > 0) {
@@ -798,74 +920,71 @@ async function getRAGResponseWithContext(input, selectedMeeting, userUid, filesC
     conversationContext += "\n";
   }
 
-  // 4. Build enhanced system prompt with source awareness (unchanged)
-  let systemPrompt = "";
-
-  if (sourceIntent.type === 'transcript_only') {
-    systemPrompt = `You are an intelligent meeting assistant. The user has specifically asked about the MEETING TRANSCRIPT only.
-
-${conversationContext}${context}
-
-CRITICAL INSTRUCTIONS:
-- ONLY use information from MEETING TRANSCRIPT CONTEXT
-- Do NOT reference any file or document information
-- Do NOT use information from recent conversation unless it's about the transcript
-- Focus entirely on what was discussed, decided, or mentioned in the meeting
-- If no meeting transcript context is available, say "I don't have access to the meeting transcript"
-- Provide comprehensive meeting summary when asked
-- Quote specific parts from the transcript when relevant`;
-
-  } else if (sourceIntent.type === 'files_only') {
-    systemPrompt = `You are an intelligent assistant with access to Google Drive files. The user has specifically asked about DRIVE FILES only.
-
-${conversationContext}${context}
-
-CRITICAL INSTRUCTIONS:
-- ONLY use information from GOOGLE DRIVE FILES CONTEXT
-- Do NOT reference any meeting transcript information
-- Focus on file contents, documents, and drive folder information
-- If no file context is available, say "I don't have access to the requested files"
-- Quote specific content from files when relevant`;
-
-  } else {
-    systemPrompt = `You are an intelligent meeting assistant with access to meeting transcripts and Google Drive documents.
-
-${conversationContext}${context}
-
-Instructions:
-- Use the provided context AND conversation history to answer questions accurately
-- For follow-up questions, refer to previous parts of our conversation
-- When someone asks "What is his age?" or similar, look at recent conversation to understand who "his" refers to
-- Use pronouns and references from the conversation context appropriately
-- Quote specific content when relevant and mention the source
-- For meeting summaries, provide comprehensive overview from transcript
-- ALWAYS mention where information came from using the source info: "${sourceInfo}"
-- If no relevant information found, clearly state this and suggest alternative approaches
-- Be conversational and maintain context across multiple questions
-- When providing information from both sources, clearly distinguish between transcript and file information`;
-  }
-
-  // 5. Prepare messages with conversation history (unchanged)
-  const messages = [{ role: "system", content: systemPrompt }];
-  const recentMessages = conversationHistory.slice(-4);
-  messages.push(...recentMessages);
-  messages.push({ role: "user", content: input });
-
+  
+  // Normalize shapes and combine results
+  const toHits = (r) => Array.isArray(r) ? r : (r?.matches || r?.results || []);
+  const allMatches = [
+    ...toHits(documentResults),
+    ...toHits(transcriptResults),
+    ...toHits(webScrapResults)
+  ];
+  
+  console.log('🧩 Combined hits:', allMatches.length);
+  // 5. Use grounded answer pipeline (anti-copy)
   try {
+    //const allMatches = [...(transcriptResults || []), ...(documentResults || []), ...(webScrapResults || [])];
+    
+    if (allMatches.length === 0) {
+      // No evidence - use conversation context
+      let contextPrompt = conversationContext ? 
+        `You are an intelligent meeting assistant.\n\n${conversationContext}\n\nNo specific documents found. Answer based on general knowledge and conversation context.` :
+        'You are an intelligent meeting assistant. Answer based on general knowledge.';
+      
+      const messages = [
+        { role: "system", content: contextPrompt },
+        { role: "user", content: input }
+      ];
+      const aiReply = await getAIResponse(messages);
+      return {
+        response: aiReply,
+        searchResults: [],
+        hasResults: false,
+        sourceInfo: "General Knowledge"
+      };
+    }
+
+    // Use RAG brain to create paraphrased, cited answer
+    const { answer, hasEvidence, sources } = await getGroundedAnswer(input, allMatches, getAIResponse);
+    
+    // Build source attribution
+    let sourcesList = new Set();
+    if (transcriptResults?.length > 0) sourcesList.add("Meeting Transcript");
+    if (documentResults?.length > 0) sourcesList.add("Google Drive Files");
+    if (webScrapResults?.length > 0) sourcesList.add("Web Scraped Data");
+    
+    const finalSourceInfo = sourcesList.size > 0 
+      ? `Sources: ${Array.from(sourcesList).join(" + ")}`
+      : "Sources: Documents";
+
+    return {
+      response: answer,
+      searchResults: allMatches,
+      hasResults: hasEvidence,
+      sourceInfo: finalSourceInfo
+    };
+
+  } catch (error) {
+    console.error("RAG brain error:", error);
+    const messages = [
+      { role: "system", content: "You are a helpful assistant. Answer concisely." },
+      { role: "user", content: input }
+    ];
     const aiReply = await getAIResponse(messages);
     return {
       response: aiReply,
-      searchResults: searchResults,
-      hasResults: searchResults.length > 0,
-      sourceInfo: sourceInfo
-    };
-  } catch (error) {
-    console.error("AI response error:", error);
-    return {
-      response: "Sorry, I'm having trouble processing your request.",
       searchResults: [],
       hasResults: false,
-      sourceInfo: "Error"
+      sourceInfo: "Error - Fallback Mode"
     };
   }
 }
@@ -931,18 +1050,18 @@ function analyzeSourceIntent(query) {
 
 
 
-function highlightSearchTerms(text, searchTerms) {
-  if (!searchTerms || searchTerms.length === 0) return text;
-  let highlightedText = text;
+// function highlightSearchTerms(text, searchTerms) {
+//   if (!searchTerms || searchTerms.length === 0) return text;
+//   let highlightedText = text;
 
-  searchTerms.forEach(term => {
-    const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`\\b(${escapedTerm})\\b`, 'gi');
-    highlightedText = highlightedText.replace(regex, '<mark>$1</mark>');
-  });
+//   searchTerms.forEach(term => {
+//     const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+//     const regex = new RegExp(`\\b(${escapedTerm})\\b`, 'gi');
+//     highlightedText = highlightedText.replace(regex, '<mark>$1</mark>');
+//   });
 
-  return highlightedText;
-}
+//   return highlightedText;
+// }
 
 
 

@@ -85,7 +85,7 @@ export async function getAIResponse(messages) {
     contents,
     generationConfig: {
       temperature: 0.7,
-      maxOutputTokens: 1000
+      maxOutputTokens: 2048
     }
   };
 
@@ -99,16 +99,38 @@ export async function getAIResponse(messages) {
 
   const { json, model, version } = await callGeminiWithFallback(body);
 
-  // Typical success shape:
-  // json.candidates[0].content.parts[0].text
+  // Check for safety blocks or finish reasons
+  const candidate = json?.candidates?.[0];
+  if (!candidate) {
+    console.error('[Gemini] No candidates in response:', json);
+    return 'The AI could not generate a response. Please try rephrasing your question.';
+  }
+
+  // Check finish reason
+  const finishReason = candidate.finishReason;
+  if (finishReason && finishReason !== 'STOP') {
+    console.warn('[Gemini] Non-standard finish reason:', finishReason);
+    
+    if (finishReason === 'SAFETY') {
+      return 'The AI response was blocked by safety filters. Please try rephrasing your question.';
+    }
+    if (finishReason === 'MAX_TOKENS') {
+      console.warn('[Gemini] Response truncated due to token limit');
+    }
+    if (finishReason === 'RECITATION') {
+      return 'The AI detected potential copyright content. Please rephrase your question.';
+    }
+  }
+
+  // Extract text from response
   const text =
-    json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
-    json?.candidates?.[0]?.content?.parts?.map(p => p.text).filter(Boolean).join('\n') ||
+    candidate.content?.parts?.[0]?.text?.trim() ||
+    candidate.content?.parts?.map(p => p.text).filter(Boolean).join('\n') ||
     '';
 
   if (!text) {
-    console.warn('[Gemini] No text returned. Raw payload:', json);
-    return 'No reply from AI.';
+    console.error('[Gemini] No text in response. Full payload:', JSON.stringify(json, null, 2));
+    return 'The AI returned an empty response. Please try again with a different question.';
   }
 
   console.log(`[Gemini] Used model=${model} on ${version}`);
