@@ -11,6 +11,107 @@ import {
   buildMessagesForUrlQA
 } from './web-scraper.js'; 
 
+
+// --- Typewriter streaming helper (word-by-word with caret + auto-scroll) ---
+(function ensureTypewriterStyle() {
+  if (document.getElementById('typewriter-style')) return;
+  const st = document.createElement('style');
+  st.id = 'typewriter-style';
+  st.textContent = `
+    .ai-bubble.typing::after {
+      content: '▍';
+      animation: blink 1s steps(1) infinite;
+      margin-left: 2px;
+      opacity: 0.6;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+  `;
+  document.head.appendChild(st);
+})();
+
+// rAF throttle so we don't spam layout
+function rafThrottle(fn) {
+  let scheduled = false;
+  return (...args) => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      try { fn(...args); } catch {}
+    });
+  };
+}
+
+function makeTypewriter(targetEl, { wps = 9, onTick } = {}) {
+  const interval = 1000 / Math.max(1, wps); // words/sec
+  const tickScroll = rafThrottle(() => {
+    try {
+      // ✅ call your actual helper that scrolls #chatMessages
+      scrollToBottom(true);
+    } catch {
+      // fallback in case scope changes
+      const pane = document.getElementById('chatMessages')
+                  || document.querySelector('.chat-messages, .messages, #chat, .conversation, .scrollable');
+      if (pane) pane.scrollTop = pane.scrollHeight;
+      else window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' });
+    }
+    if (typeof onTick === 'function') onTick();
+  });
+
+  let carry = '';
+  let queue = [];
+  let running = false;
+  let rafId = null;
+  let lastTs = 0;
+
+  targetEl.classList.add('typing');
+  targetEl.textContent = '';
+
+  function tick(ts) {
+    if (!running) return;
+    if (ts - lastTs >= interval && queue.length) {
+      lastTs = ts;
+      const word = queue.shift();
+      if (targetEl.textContent.length === 0) targetEl.textContent = word;
+      else targetEl.textContent += ' ' + word;
+      tickScroll(); // 👈 scroll as we print
+    }
+    if (queue.length || carry) {
+      rafId = requestAnimationFrame(tick);
+    } else {
+      rafId = requestAnimationFrame(tick);
+    }
+  }
+
+  return {
+    onToken: (t = '') => {
+      const s = carry + t;
+      const parts = s.split(/\s+/);
+      if (/\s$/.test(s)) carry = '';
+      else carry = parts.pop() || '';
+      for (const w of parts) if (w) queue.push(w);
+      if (!running) {
+        running = true;
+        requestAnimationFrame(tick);
+      }
+    },
+    async finish(finalText, { postProcess } = {}) {
+      if (carry) { queue.push(carry); carry = ''; }
+      await new Promise(resolve => {
+        const check = () => { if (queue.length === 0) return resolve(); requestAnimationFrame(check); };
+        check();
+      });
+      if (rafId) cancelAnimationFrame(rafId);
+      targetEl.classList.remove('typing');
+      targetEl.innerHTML = typeof linkify === 'function' ? linkify(finalText) : finalText;
+      // one last scroll to ensure the linkified content is in view
+      tickScroll();
+      if (typeof postProcess === 'function') postProcess();
+    }
+  };
+}
+// --- end typewriter helper ---
+
 const RAG_CONFIG = {
   SERVER_URL: 'http://localhost:3000',
   GEMINI_KEY: '',
@@ -23,30 +124,24 @@ const FAST_HIT_THRESHOLD = 0.88;  // short-circuit if one hit is very strong
 
 let conversationHistory = [];
 const MAX_CONVERSATION_HISTORY = 10;
-const UPLOAD_TRACKER_KEY = 'ragUploadedFiles';
-let uploadedFiles = new Set();
+const UPLOAD_TRACKER_KEY = 'ragUploadedFilesV2';
+ // Map: { [fileId]: modifiedTimeString }
+let uploadedFiles = {};
 
 async function loadUploadedFilesList() {
-  try {
-    const result = await chrome.storage.local.get(UPLOAD_TRACKER_KEY);
-    if (result[UPLOAD_TRACKER_KEY]) {
-      uploadedFiles = new Set(result[UPLOAD_TRACKER_KEY]);
-      console.log(`📦 Using cached file list with ${uploadedFiles.size} files`);
-    } else {
-      console.log('📦 No cached file list found');
-    }
-  } catch (error) {
-    console.error('Error loading uploaded files list:', error);
-  }
+   const result = await chrome.storage.local.get(UPLOAD_TRACKER_KEY);
+   if (result[UPLOAD_TRACKER_KEY]) {
+     uploadedFiles = result[UPLOAD_TRACKER_KEY];
+     console.log(`📦 Using cached file list with ${Object.keys(uploadedFiles).length} entries`);
+   } else {
+     uploadedFiles = {};
+     console.log('📦 No cached file list found');
+   }
 }
 
 async function saveUploadedFilesList() {
-  try {
-    await chrome.storage.local.set({ [UPLOAD_TRACKER_KEY]: [...uploadedFiles] });
-    console.log(`✅ Updated cached file list with ${uploadedFiles.size} files`);
-  } catch (error) {
-    console.error('Error saving uploaded files list:', error);
-  }
+  await chrome.storage.local.set({ [UPLOAD_TRACKER_KEY]: uploadedFiles });
+  console.log(`✅ Updated cached file list with ${Object.keys(uploadedFiles).length} entries`);
 }
 
 function normalizeFilename(name) {
@@ -388,14 +483,7 @@ async function processAndUploadDocuments(filesContentMap) {
   let skippedCount = 0;
   
   for (const [filename, content] of Object.entries(filesContentMap)) {
-    const normalizedFilename = normalizeFilename(filename);
     
-    // NEW CHECK: Skip if the file has already been uploaded
-    if (uploadedFiles.has(normalizedFilename)) {
-      console.log(`ℹ️ File "${filename}" already processed. Skipping upload.`);
-      skippedCount++;
-      continue;
-    }
     
     if (!content || content.trim().length === 0) {
       console.log(`⚠️ File "${filename}" has no content. Skipping.`);
@@ -438,8 +526,6 @@ async function processAndUploadDocuments(filesContentMap) {
       }
       
       // Mark the file as uploaded after successful processing
-      uploadedFiles.add(normalizedFilename);
-      await saveUploadedFilesList();
       uploadCount++;
       
     } catch (error) {
@@ -1144,7 +1230,7 @@ function analyzeSourceIntent(query) {
     async function recurse(folderId, path = "") {
       try {
         const query = `'${folderId}' in parents and trashed=false`;
-        const fields = 'files(id,name,mimeType,size,modifiedTime,webViewLink,parents,trashed)';
+        const fields = 'files(id,name,mimeType,size,modifiedTime,createdTime,md5Checksum,webViewLink,parents,trashed)';
         
         const res = await fetch(
           `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=${fields}&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=1000`,
@@ -1700,24 +1786,42 @@ async function preloadDriveFiles() {
     );
 
     console.log(`📂 Found ${supportedFiles.length} supported files in Drive`);
-    console.log(`📦 Already processed files: ${Array.from(uploadedFiles).join(', ')}`);
+    console.log(`📦 Cache contains ${Object.keys(uploadedFiles).length} file revisions (id → revSig).`);
 
     const filesToProcess = {};
     for (const file of supportedFiles.slice(0, 10)) {
+      // skip very large files (> ~5MB) – keep your existing size gate if you want
       if (file.size && parseInt(file.size) >= 5000000) continue;
 
-      const normalizedFilename = normalizeFilename(file.name);
-      if (uploadedFiles.has(normalizedFilename)) {
-        console.log(`⏭️ Skipping already processed file: ${file.name}`);
+      // Build a robust revision signature:
+      // Prefer md5Checksum (present for binaries like .pptx/.docx/.pdf),
+      // else modifiedTime+size (for Google Docs often no md5),
+      // else createdTime as a last resort.
+      const revSig =
+        file.md5Checksum ||
+        (file.modifiedTime ? `${file.modifiedTime}|${file.size || ''}` : null) ||
+        file.createdTime ||
+        'unknown';
+
+      // Ensure our cache map exists (migration safety)
+      if (!uploadedFiles || typeof uploadedFiles !== 'object' || Array.isArray(uploadedFiles)) {
+        uploadedFiles = {};
+      }
+
+      const already = uploadedFiles[file.id] && uploadedFiles[file.id] === revSig;
+      if (already) {
+        console.log(`⏭️ Skipping up-to-date file: ${file.name}`);
         continue;
       }
 
       try {
-        console.log(`📖 Loading new file: ${file.name}`);
+        console.log(`📖 Loading new/updated file: ${file.name}`);
         const content = await downloadFileContent(file, token);
         if (content && content.trim().length > 0) {
           filesToProcess[file.name.toLowerCase()] = content;
           filesContentMap[file.name.toLowerCase()] = content; // keep for local search
+          // Mark as processed for THIS revision so we don't reprocess on reload
+          uploadedFiles[file.id] = revSig;
         }
       } catch (error) {
         console.warn(`Failed to load ${file.name}:`, error);
@@ -1727,9 +1831,11 @@ async function preloadDriveFiles() {
     if (Object.keys(filesToProcess).length > 0) {
       console.log(`📤 Uploading ${Object.keys(filesToProcess).length} new files to vector database...`);
       await processAndUploadDocuments(filesToProcess);
+      await saveUploadedFilesList();
     } else {
-      console.log(`✅ All files already processed. RAG system ready with ${uploadedFiles.size} documents`);
+      console.log(`✅ All files already processed. RAG system ready with ${Object.keys(uploadedFiles).length} documents`);
     }
+
 
     // 🔗 NEW: scan file contents for external links and index them into Pinecone
     try {
@@ -1796,11 +1902,19 @@ chatInput.addEventListener("keydown", async (e) => {
         }
 
         const messages = buildMessagesForUrlQA(question, text);
-        const answer = await getAIResponse(messages);
+const tw = makeTypewriter(aiBubble, { wps: 10 });
 
+const answer = await getAIResponse(messages, {
+  onToken: (t) => tw.onToken(t)
+});
 
-        aiBubble.innerHTML = `${linkify(answer)}<div style="margin-top:8px;font-size:.85em;color:#666">🔗 Source: <a href="${url}" target="_blank" rel="noopener noreferrer">${title || url}</a></div>`;
-
+await tw.finish(answer, {
+  postProcess: () => {
+    aiBubble.innerHTML += `<div style="margin-top:10px">
+      <a href="${url}" target="_blank" rel="noopener noreferrer">${title || url}</a>
+    </div>`;
+  }
+});
         // Fire-and-forget: index this page for future RAG (meeting-aware)
         const nsHint = selectedMeeting?.meetingId ? `meeting:${selectedMeeting.meetingId}` : undefined;
         scrapeAndUpsert(input, nsHint).catch(()=>{});
@@ -1864,15 +1978,29 @@ chatInput.addEventListener("keydown", async (e) => {
       await handleFileSearchQuery(input, aiBubble);
     } else {
       aiBubble.innerHTML = '<div class="typing-indicator">🔍 Searching knowledge base...</div>';
-      const ragResponse = await getRAGResponseWithContext(input, selectedMeeting, userUid, filesContentMap, getAIResponse);
 
+const tw = makeTypewriter(aiBubble, { wps: 9 });
+
+const streamingGetAI = (messages) => getAIResponse(messages, {
+  onToken: (t) => tw.onToken(t)
+});
+
+const ragResponse = await getRAGResponseWithContext(
+  input,
+  selectedMeeting,
+  userUid,
+  filesContentMap,
+  streamingGetAI
+);
+
+await tw.finish(ragResponse.response);
+
+      // Save history as before
       conversationHistory.push({ role: "assistant", content: ragResponse.response });
-
       if (conversationHistory.length > MAX_CONVERSATION_HISTORY * 2) {
         conversationHistory = conversationHistory.slice(-MAX_CONVERSATION_HISTORY * 2);
       }
 
-      aiBubble.innerHTML = linkify(ragResponse.response);
 
       if (ragResponse.hasResults) {
         const contextInfo = document.createElement("div");
