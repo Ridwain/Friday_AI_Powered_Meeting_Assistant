@@ -10,7 +10,10 @@ const transcriptionBtn = document.getElementById("transcriptionBtn");
 
 // Real‑time transcript embedding and upsert helpers
 const REALTIME_PINECONE_URL = 'http://localhost:3000/upsert';
-const GEMINI_KEY = '';
+
+
+// NEW SECURE VERSION:
+const SERVER_URL = 'http://localhost:3000';
 
 async function generateRealtimeEmbedding(text) {
   try {
@@ -22,28 +25,20 @@ async function generateRealtimeEmbedding(text) {
     const input = text.length > 8000 ? text.slice(-8000) : text;
     console.log(`Generating embedding for text: "${input.substring(0, 100)}..."`);
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'text-embedding-004',
-          content: {
-            parts: [{ text: input }]
-          }
-        })
-      }
-    );
+    const response = await fetch(`${SERVER_URL}/ai/embed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: input })
+    });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Server embedding error: ${response.status} - ${errorData.error || 'Unknown error'}`);
     }
 
     const data = await response.json();
     console.log('Successfully generated embedding');
-    return data.embedding?.values;
+    return data.embedding;
   } catch (err) {
     console.error('generateRealtimeEmbedding error:', err);
     return null;

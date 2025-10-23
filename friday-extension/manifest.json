@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Friday Meeting Assistant Login",
+  "name": "Friday ",
   "version": "1.0",
-  "description": "Firebase login for Friday Meeting Assistant",
+  "description": "Friday - An Ai Powered Meeting Assistant",
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
