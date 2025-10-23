@@ -1,4 +1,4 @@
-# Friday — AI-Powered Meeting Assistant
+# An Chrome extension including a rag system chatbot
 
 RAG-based in-meeting helper that answers questions with **citations** from your **live transcript**, **Google Drive files**, and optional **web snippets** — all inside a lightweight Chrome (MV3) extension with a companion web dashboard and a Node/Express backend.
 
