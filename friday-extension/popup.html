@@ -1,140 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Login</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      margin: 0;
-      padding: 20px;
-      background-color: #f4f4f4;
-      width: 400px;
-      overflow-x: hidden;
-      color: #222;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <title>Login</title>
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f4f4f4;
+        width: 400px;
+        overflow-x: hidden;
+        color: #222;
+      }
 
-    h3 {
-      margin-bottom: 10px;
-    }
+      h3 {
+        margin-bottom: 10px;
+      }
 
-    input[type="email"],
-    input[type="password"] {
-      width: calc(100% - 24px); /* Prevent overflow due to padding */
-      padding: 10px;
-      margin-bottom: 10px;
-      border: 2px solid #ccc;
-      border-radius: 6px;
-      font-size: 14px;
-      background-color: #fff;
-      transition: border-color 0.2s ease;
-    }
+      input[type="email"],
+      input[type="password"] {
+        width: calc(100% - 24px); /* Prevent overflow due to padding */
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 2px solid #ccc;
+        border-radius: 6px;
+        font-size: 14px;
+        background-color: #fff;
+        transition: border-color 0.2s ease;
+      }
 
-    input[type="email"]:focus,
-    input[type="password"]:focus {
-      border-color: #222;
-      outline: none;
-    }
+      input[type="email"]:focus,
+      input[type="password"]:focus {
+        border-color: #222;
+        outline: none;
+      }
 
-    .button-group {
-      display: flex;
-      gap: 12px;
-      margin-top: 10px;
-      margin-bottom: 20px;
-    }
+      .button-group {
+        display: flex;
+        gap: 12px;
+        margin-top: 10px;
+        margin-bottom: 20px;
+      }
 
-    .button-group button {
-      flex: 1;
-      padding: 10px 16px;
-      font-size: 14px;
-      border-radius: 6px;
-      border: none;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-      font-weight: 500;
-      font-family: 'Segoe UI', sans-serif;
-    }
+      .button-group button {
+        flex: 1;
+        padding: 10px 16px;
+        font-size: 14px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        font-weight: 500;
+        font-family: "Segoe UI", sans-serif;
+      }
 
-    #loginBtn {
-      background-color: #5cb85c; /* light green */
-      color: #fff;
-    }
+      #loginBtn {
+        background-color: #5cb85c; /* light green */
+        color: #fff;
+      }
 
-    #loginBtn:hover {
-      background-color: #4cae4c;
-    }
+      #loginBtn:hover {
+        background-color: #4cae4c;
+      }
 
-    #googleBtn {
-      background-color: #5bc0de; /* light blue */
-      color: #fff;
-    }
+      #googleBtn {
+        background-color: #5bc0de; /* light blue */
+        color: #fff;
+      }
 
-    #googleBtn:hover {
-      background-color: #31b0d5;
-    }
+      #googleBtn:hover {
+        background-color: #31b0d5;
+      }
 
-    #status {
-      margin-top: 10px;
-      font-size: 14px;
-      color: #444;
-    }
+      #status {
+        margin-top: 10px;
+        font-size: 14px;
+        color: #444;
+      }
 
-    #meetings {
-      margin-top: 20px;
-    }
+      #meetings {
+        margin-top: 20px;
+      }
 
-    #meetings div {
-      padding: 10px;
-      background-color: #fff;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      margin-bottom: 10px;
-      font-size: 14px;
-    }
+      #meetings div {
+        padding: 10px;
+        background-color: #fff;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        font-size: 14px;
+      }
 
-    #meetings a {
-      color: #0077cc;
-      text-decoration: none;
-    }
+      #meetings a {
+        color: #0077cc;
+        text-decoration: none;
+      }
 
-    #meetings a:hover {
-      text-decoration: underline;
-    }
+      #meetings a:hover {
+        text-decoration: underline;
+      }
 
-    #logoutBtn {
-      padding: 10px 16px;
-      font-size: 14px;
-      border-radius: 6px;
-      border: none;
-      background-color: #222;
-      color: #fff;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-      width: 100%;
-    }
+      #logoutBtn {
+        padding: 10px 16px;
+        font-size: 14px;
+        border-radius: 6px;
+        border: none;
+        background-color: #222;
+        color: #fff;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        width: 100%;
+      }
 
-    #logoutBtn:hover {
-      background-color: #555;
-    }
-  </style>
-</head>
+      #logoutBtn:hover {
+        background-color: #555;
+      }
+    </style>
+  </head>
 
-<body>
-  <h3>Email Login</h3>
-  <input id="email" type="email" placeholder="Email" />
-  <input id="password" type="password" placeholder="Password" />
+  <body>
+    <h3>Email Login</h3>
+    <input id="email" type="email" placeholder="Email" />
+    <input id="password" type="password" placeholder="Password" />
 
-  <div class="button-group">
-    <button id="loginBtn">Login</button>
-    <button id="googleBtn">Sign in with Google</button>
-  </div>
+    <div class="button-group">
+      <button id="loginBtn">Login</button>
+      <button id="googleBtn">Sign in with Google</button>
+    </div>
 
-  <p id="status"></p>
+    <p id="status"></p>
 
-  <div id="meetings"></div>
+    <div id="meetings"></div>
 
-  <button id="logoutBtn" style="display: none;">Logout</button>
+    <button id="logoutBtn" style="display: none">Logout</button>
 
-  <script type="module" src="popup.js"></script>
-</body>
+    <script type="module" src="popup.js"></script>
+  </body>
 </html>

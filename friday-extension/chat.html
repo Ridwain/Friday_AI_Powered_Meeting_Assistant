@@ -1,169 +1,172 @@
 <!DOCTYPE html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>AI Chat</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        font-family: "Segoe UI", sans-serif;
+        background: #fff;
+        color: #222;
+        overflow: hidden;
+        /* prevent outer scroll */
+      }
 
-<head>
-  <meta charset="UTF-8" />
-  <title>AI Chat</title>
-  <style>
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: 'Segoe UI', sans-serif;
-      background: #fff;
-      color: #222;
-      overflow: hidden;
-      /* prevent outer scroll */
-    }
+      body {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        /* full viewport height */
+        border-left: 2px solid black;
+        /* subtle borders on window edges */
+        border-right: 2px solid black;
+        border-bottom: 2px solid black;
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+        border-bottom-left-radius: 8px;
+        /* more curve */
+        border-bottom-right-radius: 8px;
+        /* more curve */
+        box-sizing: border-box;
+      }
 
-    body {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      /* full viewport height */
-      border-left: 2px solid black;
-      /* subtle borders on window edges */
-      border-right: 2px solid black;
-      border-bottom: 2px solid black;
-      border-top-left-radius: 0;
-      border-top-right-radius: 0;
-      border-bottom-left-radius: 8px;
-      /* more curve */
-      border-bottom-right-radius: 8px;
-      /* more curve */
-      box-sizing: border-box;
-    }
+      /* Chat messages scroll independently */
+      #chatMessages {
+        flex: 1 1 auto;
+        padding: 12px 16px;
+        overflow-y: auto;
+        font-size: 14px;
+        background: #fff;
+        color: #333;
+        user-select: text;
+        box-sizing: border-box;
+      }
 
-    /* Chat messages scroll independently */
-    #chatMessages {
-      flex: 1 1 auto;
-      padding: 12px 16px;
-      overflow-y: auto;
-      font-size: 14px;
-      background: #fff;
-      color: #333;
-      user-select: text;
-      box-sizing: border-box;
-    }
+      #chatInputArea {
+        flex: 0 0 auto;
+        /* do not grow or shrink, fixed height */
+        display: flex;
+        align-items: center;
+        padding: 6px 12px;
+        border-top: 2px solid #222;
+        background: #fff;
+        gap: 8px;
+        box-sizing: border-box;
+      }
 
-    #chatInputArea {
-      flex: 0 0 auto;
-      /* do not grow or shrink, fixed height */
-      display: flex;
-      align-items: center;
-      padding: 6px 12px;
-      border-top: 2px solid #222;
-      background: #fff;
-      gap: 8px;
-      box-sizing: border-box;
-    }
+      #chatInput {
+        flex: 1;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 2px solid #666;
+        font-size: 14px;
+        color: #222;
+        outline: none;
+        font-weight: 500;
+        min-height: 30px;
+      }
 
-    #chatInput {
-      flex: 1;
-      padding: 6px 10px;
-      border-radius: 6px;
-      border: 2px solid #666;
-      font-size: 14px;
-      color: #222;
-      outline: none;
-      font-weight: 500;
-      min-height: 30px;
-    }
+      #chatInput::placeholder {
+        color: #999;
+      }
 
-    #chatInput::placeholder {
-      color: #999;
-    }
+      #micBtn {
+        width: 30px;
+        height: 30px;
+        font-size: 16px;
+        background-color: #222;
+        border: none;
+        color: #fff;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        user-select: none;
+        transition: background-color 0.2s ease;
+      }
 
-    #micBtn {
-      width: 30px;
-      height: 30px;
-      font-size: 16px;
-      background-color: #222;
-      border: none;
-      color: #fff;
-      border-radius: 50%;
-      cursor: pointer;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      user-select: none;
-      transition: background-color 0.2s ease;
-    }
+      #micBtn:hover {
+        background-color: #444;
+      }
 
-    #micBtn:hover {
-      background-color: #444;
-    }
+      #voiceReplyToggleContainer {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: #444;
+        user-select: none;
+        padding-left: 4px;
+      }
 
-    #voiceReplyToggleContainer {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 13px;
-      color: #444;
-      user-select: none;
-      padding-left: 4px;
-    }
+      #sendBtn {
+        width: 60px;
+        height: 30px;
+        font-size: 14px;
+        background-color: #222;
+        border: none;
+        color: #fff;
+        border-radius: 6px;
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 0.2s ease;
+      }
 
-    #sendBtn {
-      width: 60px;
-      height: 30px;
-      font-size: 14px;
-      background-color: #222;
-      border: none;
-      color: #fff;
-      border-radius: 6px;
-      cursor: pointer;
-      user-select: none;
-      transition: background-color 0.2s ease;
-    }
+      #sendBtn:hover {
+        background-color: #444;
+      }
 
-    #sendBtn:hover {
-      background-color: #444;
-    }
+      .chat-bubble {
+        padding: 10px 16px;
+        border-radius: 20px;
+        margin-bottom: 10px;
+        max-width: 75%;
+        word-wrap: break-word;
+        font-size: 14px;
+        line-height: 1.3;
+        user-select: text;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
 
-    .chat-bubble {
-      padding: 10px 16px;
-      border-radius: 20px;
-      margin-bottom: 10px;
-      max-width: 75%;
-      word-wrap: break-word;
-      font-size: 14px;
-      line-height: 1.3;
-      user-select: text;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    }
+      .user-bubble {
+        background-color: #c9f0ff;
+        color: #036b9a;
+        margin-left: auto;
+        text-align: right;
+        border-bottom-right-radius: 4px;
+      }
 
-    .user-bubble {
-      background-color: #c9f0ff;
-      color: #036b9a;
-      margin-left: auto;
-      text-align: right;
-      border-bottom-right-radius: 4px;
-    }
+      .ai-bubble {
+        background-color: #f0f0f0;
+        color: #444;
+        margin-right: auto;
+        border-bottom-left-radius: 4px;
+      }
+    </style>
+  </head>
 
-    .ai-bubble {
-      background-color: #f0f0f0;
-      color: #444;
-      margin-right: auto;
-      border-bottom-left-radius: 4px;
-    }
-  </style>
-</head>
-
-<body>
-  <div id="chatMessages"></div>
-  <div id="chatInputArea">
-    <input id="chatInput" type="text" placeholder="Type your question..." autocomplete="off" />
-    <button id="sendBtn">Send</button>
-    <button id="micBtn" title="Toggle microphone">🎤</button>
-    <div id="voiceReplyToggleContainer">
-      <input type="checkbox" id="voiceReplyToggle" />
-      <label for="voiceReplyToggle">Voice reply</label>
+  <body>
+    <div id="chatMessages"></div>
+    <div id="chatInputArea">
+      <input
+        id="chatInput"
+        type="text"
+        placeholder="Type your question..."
+        autocomplete="off"
+      />
+      <button id="sendBtn">Send</button>
+      <button id="micBtn" title="Toggle microphone">🎤</button>
+      <div id="voiceReplyToggleContainer">
+        <input type="checkbox" id="voiceReplyToggle" />
+        <label for="voiceReplyToggle">Voice reply</label>
+      </div>
     </div>
-  </div>
 
-  <script type="module" src="chat.js" defer></script>
-</body>
-
+    <script type="module" src="chat.js" defer></script>
+  </body>
 </html>

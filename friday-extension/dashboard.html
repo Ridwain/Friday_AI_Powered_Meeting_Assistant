@@ -1,113 +1,117 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="UTF-8" />
-  <title>Dashboard</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      margin: 0;
-      width: 500px;
-      height: 500px;
-      position: relative;
-      background-color: #f4f4f4;
-      overflow: visible;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <title>Dashboard</title>
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        margin: 0;
+        width: 500px;
+        height: 500px;
+        position: relative;
+        background-color: #f4f4f4;
+        overflow: visible;
+      }
 
-    #container {
-      padding: 20px;
-      height: calc(100% - 60px);
-      overflow-y: auto;
-      box-sizing: border-box;
-    }
+      #container {
+        padding: 20px;
+        height: calc(100% - 60px);
+        overflow-y: auto;
+        box-sizing: border-box;
+      }
 
-    .meeting-card {
-      border: 1px solid #ccc;
-      padding: 10px;
-      margin-bottom: 10px;
-      cursor: pointer;
-      border-radius: 8px;
-      background-color: #f9f9f9;
-      transition: background-color 0.2s ease;
-    }
+      .meeting-card {
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        border-radius: 8px;
+        background-color: #f9f9f9;
+        transition: background-color 0.2s ease;
+      }
 
-    .meeting-card:hover {
-      background-color: #e0f7fa;
-    }
+      .meeting-card:hover {
+        background-color: #e0f7fa;
+      }
 
-    #meetings {
-      max-height: 300px;
-      overflow-y: auto;
-      margin-bottom: 20px;
-    }
+      #meetings {
+        max-height: 300px;
+        overflow-y: auto;
+        margin-bottom: 20px;
+      }
 
-    #logoutBtn {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      padding: 8px 16px;
-      background-color: #222;
-      color: #fff;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: background-color 0.2s ease;
-    }
+      #logoutBtn {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        padding: 8px 16px;
+        background-color: #222;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.2s ease;
+      }
 
-    #logoutBtn:hover {
-      background-color: #555;
-    }
+      #logoutBtn:hover {
+        background-color: #555;
+      }
 
-    #bottomButtons {
-      position: absolute;
-      bottom: 15px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 20px;
-      z-index: 1000;
-    }
+      #bottomButtons {
+        position: absolute;
+        bottom: 15px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 20px;
+        z-index: 1000;
+      }
 
-    #backBtn,
-    #openChatBtn,
-    #transcriptionBtn {
-      padding: 8px 16px;
-      background-color: #222;
-      color: #fff;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: background-color 0.2s ease;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      user-select: none;
-      white-space: nowrap;
-    }
+      #backBtn,
+      #openChatBtn,
+      #transcriptionBtn {
+        padding: 8px 16px;
+        background-color: #222;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        user-select: none;
+        white-space: nowrap;
+      }
 
-    #backBtn:hover,
-    #openChatBtn:hover,
-    #transcriptionBtn:hover {
-      background-color: #555;
-    }
-  </style>
-</head>
+      #backBtn:hover,
+      #openChatBtn:hover,
+      #transcriptionBtn:hover {
+        background-color: #555;
+      }
+    </style>
+  </head>
 
-<body>
-  <div id="container">
-    <h2 id="welcome">Loading...</h2>
-    <div id="meetings"></div>
-    <button id="logoutBtn">Logout</button>
-  </div>
+  <body>
+    <div id="container">
+      <h2 id="welcome">Loading...</h2>
+      <div id="meetings"></div>
+      <button id="logoutBtn">Logout</button>
+    </div>
 
-  <div id="bottomButtons" style="display:none;">
-    <button id="backBtn" title="Back to all meetings">⬅️ Back to Meetings</button>
-    <button id="openChatBtn" title="Ask AI">🤖 Ask AI</button>
-    <button id="transcriptionBtn" title="Start Transcription">🎙️ Start Transcription</button>
-  </div>
-  <script type="module" src="dashboard.js"></script>
-</body>
+    <div id="bottomButtons" style="display: none">
+      <button id="backBtn" title="Back to all meetings">
+        ⬅️ Back to Meetings
+      </button>
+      <button id="openChatBtn" title="Ask AI">🤖 Ask AI</button>
+      <button id="transcriptionBtn" title="Start Transcription">
+        🎙️ Start Transcription
+      </button>
+    </div>
+    <script type="module" src="dashboard.js"></script>
+  </body>
 </html>

@@ -1,9 +1,9 @@
-(function() {
+(function () {
   // Configuration constants
   const CONFIG = {
     SAVE_INTERVAL: 2000,
     MAX_TEXT_LENGTH: 50,
-    SUPPORTED_LANGUAGES: ['en-US', 'es-ES', 'fr-FR'],
+    SUPPORTED_LANGUAGES: ["en-US", "es-ES", "fr-FR"],
     MAX_RESTART_ATTEMPTS: 5,
     RESTART_DELAY: 1000,
     NO_SPEECH_TIMEOUT: 10000, // 10 seconds
@@ -22,7 +22,7 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       max-width: 300px;
       word-wrap: break-word;
-    `
+    `,
   };
 
   // State management
@@ -39,14 +39,14 @@
     restartTimeout: null,
     noSpeechTimeout: null,
     isRestarting: false,
-    isStopping: false // 🔥 NEW: Flag to prevent interference during stop
+    isStopping: false, // 🔥 NEW: Flag to prevent interference during stop
   };
 
   // Logging utility
   const logger = {
     info: (msg) => console.log(`[Transcription] ${msg}`),
     error: (msg, error) => console.error(`[Transcription] ${msg}`, error),
-    warn: (msg) => console.warn(`[Transcription] ${msg}`)
+    warn: (msg) => console.warn(`[Transcription] ${msg}`),
   };
 
   // Listen for messages from background script
@@ -77,13 +77,18 @@
    * @param {string} uid - User identifier
    * @param {string} [language] - Speech recognition language
    */
-  function startTranscription(meetingId, uid, language = CONFIG.SUPPORTED_LANGUAGES[0]) {
+  function startTranscription(
+    meetingId,
+    uid,
+    language = CONFIG.SUPPORTED_LANGUAGES[0]
+  ) {
     if (transcriptionState.isActive && !transcriptionState.isRestarting) {
       logger.info("Transcription already active");
       return;
     }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       sendErrorMessage("Speech Recognition not supported in this browser");
       return;
@@ -94,12 +99,14 @@
       Object.assign(transcriptionState, {
         meetingId,
         uid,
-        accumulatedTranscript: transcriptionState.isRestarting ? transcriptionState.accumulatedTranscript : "",
+        accumulatedTranscript: transcriptionState.isRestarting
+          ? transcriptionState.accumulatedTranscript
+          : "",
         lastSaveTime: 0,
         language,
         lastActivity: Date.now(),
         isRestarting: false,
-        isStopping: false // 🔥 Reset stopping flag
+        isStopping: false, // 🔥 Reset stopping flag
       });
 
       // Clean up previous recognition if exists
@@ -136,19 +143,22 @@
       transcriptionState.restartAttempts = 0;
       transcriptionState.lastActivity = Date.now();
       logger.info("Speech recognition started");
-      
+
       if (!transcriptionState.isRestarting) {
         initializeTranscriptDocument();
         addTranscriptionIndicator();
       }
-      
+
       // Set up no-speech timeout
       clearTimeout(transcriptionState.noSpeechTimeout);
       transcriptionState.noSpeechTimeout = setTimeout(() => {
         // 🔥 FIX: Check if we're not stopping before restarting
-        if (transcriptionState.isActive && 
-            !transcriptionState.isStopping && 
-            Date.now() - transcriptionState.lastActivity > CONFIG.NO_SPEECH_TIMEOUT) {
+        if (
+          transcriptionState.isActive &&
+          !transcriptionState.isStopping &&
+          Date.now() - transcriptionState.lastActivity >
+            CONFIG.NO_SPEECH_TIMEOUT
+        ) {
           logger.warn("No speech detected for extended period, restarting...");
           restartRecognition();
         }
@@ -181,14 +191,17 @@
       }
 
       updateTranscriptionIndicator(finalTranscript || interimTranscript);
-      
+
       // Reset no-speech timeout
       clearTimeout(transcriptionState.noSpeechTimeout);
       transcriptionState.noSpeechTimeout = setTimeout(() => {
         // 🔥 FIX: Check if we're not stopping before restarting
-        if (transcriptionState.isActive && 
-            !transcriptionState.isStopping && 
-            Date.now() - transcriptionState.lastActivity > CONFIG.NO_SPEECH_TIMEOUT) {
+        if (
+          transcriptionState.isActive &&
+          !transcriptionState.isStopping &&
+          Date.now() - transcriptionState.lastActivity >
+            CONFIG.NO_SPEECH_TIMEOUT
+        ) {
           logger.warn("No speech detected for extended period, restarting...");
           restartRecognition();
         }
@@ -207,49 +220,67 @@
 
       // Handle different error types
       switch (event.error) {
-        case 'network':
+        case "network":
           logger.warn("Network error, will retry...");
-          if (transcriptionState.restartAttempts < CONFIG.MAX_RESTART_ATTEMPTS) {
+          if (
+            transcriptionState.restartAttempts < CONFIG.MAX_RESTART_ATTEMPTS
+          ) {
             setTimeout(() => restartRecognition(), 2000);
           } else {
-            sendErrorMessage("Network connectivity issues. Please check your connection and try again.");
+            sendErrorMessage(
+              "Network connectivity issues. Please check your connection and try again."
+            );
             stopTranscription();
           }
           break;
-          
-        case 'no-speech':
+
+        case "no-speech":
           logger.warn("No speech detected, restarting...");
-          if (transcriptionState.restartAttempts < CONFIG.MAX_RESTART_ATTEMPTS) {
+          if (
+            transcriptionState.restartAttempts < CONFIG.MAX_RESTART_ATTEMPTS
+          ) {
             restartRecognition();
           } else {
             logger.warn("Too many no-speech errors, stopping transcription");
-            sendErrorMessage("Extended period without speech detected. Transcription stopped.");
+            sendErrorMessage(
+              "Extended period without speech detected. Transcription stopped."
+            );
             stopTranscription();
           }
           break;
-          
-        case 'aborted':
+
+        case "aborted":
           logger.info("Speech recognition was aborted");
           // Don't restart if aborted intentionally (likely during stop)
-          if (transcriptionState.isActive && !transcriptionState.isRestarting && !transcriptionState.isStopping) {
+          if (
+            transcriptionState.isActive &&
+            !transcriptionState.isRestarting &&
+            !transcriptionState.isStopping
+          ) {
             logger.warn("Unexpected abort, restarting...");
             restartRecognition();
           }
           break;
-          
-        case 'audio-capture':
-          sendErrorMessage("Microphone access denied or not available. Please check your microphone permissions.");
+
+        case "audio-capture":
+          sendErrorMessage(
+            "Microphone access denied or not available. Please check your microphone permissions."
+          );
           stopTranscription();
           break;
-          
-        case 'not-allowed':
-          sendErrorMessage("Microphone permission denied. Please allow microphone access and try again.");
+
+        case "not-allowed":
+          sendErrorMessage(
+            "Microphone permission denied. Please allow microphone access and try again."
+          );
           stopTranscription();
           break;
-          
+
         default:
           logger.error(`Unhandled error: ${event.error}`);
-          if (transcriptionState.restartAttempts < CONFIG.MAX_RESTART_ATTEMPTS) {
+          if (
+            transcriptionState.restartAttempts < CONFIG.MAX_RESTART_ATTEMPTS
+          ) {
             setTimeout(() => restartRecognition(), 1000);
           } else {
             sendErrorMessage(`Speech recognition error: ${event.error}`);
@@ -261,9 +292,13 @@
     recognition.onend = () => {
       logger.info("Speech recognition ended");
       clearTimeout(transcriptionState.noSpeechTimeout);
-      
+
       // 🔥 FIX: Don't restart if we're stopping
-      if (transcriptionState.isActive && !transcriptionState.isRestarting && !transcriptionState.isStopping) {
+      if (
+        transcriptionState.isActive &&
+        !transcriptionState.isRestarting &&
+        !transcriptionState.isStopping
+      ) {
         logger.info("Unexpected end, restarting...");
         restartRecognition();
       }
@@ -275,7 +310,11 @@
    */
   function restartRecognition() {
     // 🔥 FIX: Don't restart if we're stopping
-    if (!transcriptionState.isActive || transcriptionState.isRestarting || transcriptionState.isStopping) {
+    if (
+      !transcriptionState.isActive ||
+      transcriptionState.isRestarting ||
+      transcriptionState.isStopping
+    ) {
       logger.info("Skipping restart - stopping or already restarting");
       return;
     }
@@ -283,11 +322,15 @@
     transcriptionState.isRestarting = true;
     transcriptionState.restartAttempts++;
 
-    logger.info(`Restart attempt ${transcriptionState.restartAttempts}/${CONFIG.MAX_RESTART_ATTEMPTS}`);
+    logger.info(
+      `Restart attempt ${transcriptionState.restartAttempts}/${CONFIG.MAX_RESTART_ATTEMPTS}`
+    );
 
     if (transcriptionState.restartAttempts > CONFIG.MAX_RESTART_ATTEMPTS) {
       logger.error("Max restart attempts reached, stopping transcription");
-      sendErrorMessage("Transcription failed after multiple attempts. Please try again.");
+      sendErrorMessage(
+        "Transcription failed after multiple attempts. Please try again."
+      );
       stopTranscription();
       return;
     }
@@ -307,9 +350,15 @@
     }
 
     // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-    const delay = Math.min(CONFIG.RESTART_DELAY * Math.pow(2, transcriptionState.restartAttempts - 1), 16000);
-    
-    updateTranscriptionIndicator(`Restarting in ${Math.ceil(delay/1000)}s...`);
+    const delay = Math.min(
+      CONFIG.RESTART_DELAY *
+        Math.pow(2, transcriptionState.restartAttempts - 1),
+      16000
+    );
+
+    updateTranscriptionIndicator(
+      `Restarting in ${Math.ceil(delay / 1000)}s...`
+    );
 
     transcriptionState.restartTimeout = setTimeout(() => {
       // 🔥 FIX: Double-check we're not stopping before restarting
@@ -317,8 +366,8 @@
         logger.info("Restarting speech recognition...");
         try {
           startTranscription(
-            transcriptionState.meetingId, 
-            transcriptionState.uid, 
+            transcriptionState.meetingId,
+            transcriptionState.uid,
             transcriptionState.language
           );
         } catch (error) {
@@ -359,7 +408,7 @@
       if (transcriptionState.accumulatedTranscript.trim()) {
         logger.info("Finalizing transcript before stop...");
         finalizeTranscriptDocument();
-        
+
         // 🔥 FIX: Give a moment for the message to be sent
         setTimeout(() => {
           completeStopProcess();
@@ -367,7 +416,6 @@
       } else {
         completeStopProcess();
       }
-
     } catch (error) {
       logger.error("Error stopping transcription:", error);
       // Still complete the stop process even if there's an error
@@ -381,7 +429,7 @@
   function completeStopProcess() {
     try {
       logger.info("Completing stop process...");
-      
+
       transcriptionState.isActive = false;
       transcriptionState.isRestarting = false;
 
@@ -391,10 +439,10 @@
       }
 
       removeTranscriptionIndicator();
-      
+
       // 🔥 FIX: Reset stopping flag at the very end
       transcriptionState.isStopping = false;
-      
+
       logger.info("Transcription stopped successfully");
     } catch (error) {
       logger.error("Error in complete stop process:", error);
@@ -415,7 +463,7 @@
         uid: transcriptionState.uid,
         meetingId: transcriptionState.meetingId,
         startTime: new Date().toISOString(),
-        language: transcriptionState.language
+        language: transcriptionState.language,
       });
     } catch (error) {
       logger.error("Failed to initialize transcript:", error);
@@ -441,7 +489,7 @@
           meetingId: transcriptionState.meetingId,
           transcript: transcriptionState.accumulatedTranscript,
           lastUpdated: new Date().toISOString(),
-          language: transcriptionState.language
+          language: transcriptionState.language,
         });
       } catch (error) {
         logger.error("Failed to save transcript:", error);
@@ -454,15 +502,18 @@
    */
   function finalizeTranscriptDocument() {
     try {
-      logger.info(`Finalizing transcript: ${transcriptionState.accumulatedTranscript.length} characters`);
+      logger.info(
+        `Finalizing transcript: ${transcriptionState.accumulatedTranscript.length} characters`
+      );
       chrome.runtime.sendMessage({
         type: "FINALIZE_TRANSCRIPT",
         uid: transcriptionState.uid,
         meetingId: transcriptionState.meetingId,
         transcript: transcriptionState.accumulatedTranscript,
         endTime: new Date().toISOString(),
-        wordCount: transcriptionState.accumulatedTranscript.trim().split(/\s+/).length,
-        language: transcriptionState.language
+        wordCount: transcriptionState.accumulatedTranscript.trim().split(/\s+/)
+          .length,
+        language: transcriptionState.language,
       });
       logger.info("Finalization message sent");
     } catch (error) {
@@ -475,10 +526,10 @@
    */
   function addTranscriptionIndicator() {
     removeTranscriptionIndicator();
-    const indicator = document.createElement('div');
-    indicator.id = 'friday-transcription-indicator';
+    const indicator = document.createElement("div");
+    indicator.id = "friday-transcription-indicator";
     indicator.style.cssText = CONFIG.INDICATOR_STYLES;
-    indicator.innerHTML = '🎙️ Recording...';
+    indicator.innerHTML = "🎙️ Recording...";
     document.body.appendChild(indicator);
   }
 
@@ -487,17 +538,24 @@
    * @param {string} text - Current transcript text
    */
   function updateTranscriptionIndicator(text) {
-    const indicator = document.getElementById('friday-transcription-indicator');
+    const indicator = document.getElementById("friday-transcription-indicator");
     if (indicator && text.trim()) {
-      const truncatedText = text.length > CONFIG.MAX_TEXT_LENGTH 
-        ? text.substring(0, CONFIG.MAX_TEXT_LENGTH) + '...' 
-        : text;
-      
-      const statusIcon = transcriptionState.isRestarting ? '🔄' : 
-                        transcriptionState.isStopping ? '🛑' : '🎙️';
-      const statusText = transcriptionState.isRestarting ? 'Restarting...' : 
-                        transcriptionState.isStopping ? 'Stopping...' : 'Recording...';
-      
+      const truncatedText =
+        text.length > CONFIG.MAX_TEXT_LENGTH
+          ? text.substring(0, CONFIG.MAX_TEXT_LENGTH) + "..."
+          : text;
+
+      const statusIcon = transcriptionState.isRestarting
+        ? "🔄"
+        : transcriptionState.isStopping
+        ? "🛑"
+        : "🎙️";
+      const statusText = transcriptionState.isRestarting
+        ? "Restarting..."
+        : transcriptionState.isStopping
+        ? "Stopping..."
+        : "Recording...";
+
       indicator.innerHTML = `${statusIcon} ${statusText}<br><small style="opacity: 0.8;">${truncatedText}</small>`;
     }
   }
@@ -506,7 +564,7 @@
    * Removes transcription indicator
    */
   function removeTranscriptionIndicator() {
-    const indicator = document.getElementById('friday-transcription-indicator');
+    const indicator = document.getElementById("friday-transcription-indicator");
     if (indicator) {
       indicator.remove();
     }
@@ -520,7 +578,7 @@
     try {
       chrome.runtime.sendMessage({
         type: "TRANSCRIPTION_ERROR",
-        error
+        error,
       });
     } catch (e) {
       logger.error("Failed to send error message:", e);
@@ -535,10 +593,10 @@
     if (transcriptionState.isActive) {
       stopTranscription();
     }
-    
+
     clearTimeout(transcriptionState.restartTimeout);
     clearTimeout(transcriptionState.noSpeechTimeout);
-    
+
     transcriptionState = {
       recognition: null,
       isActive: false,
@@ -552,18 +610,18 @@
       restartTimeout: null,
       noSpeechTimeout: null,
       isRestarting: false,
-      isStopping: false
+      isStopping: false,
     };
   }
 
   // Event listeners
-  window.addEventListener('beforeunload', cleanup);
-  window.addEventListener('unload', cleanup);
+  window.addEventListener("beforeunload", cleanup);
+  window.addEventListener("unload", cleanup);
 
   // Notify background script that content script is ready
   try {
     chrome.runtime.sendMessage({
-      type: "CONTENT_SCRIPT_READY"
+      type: "CONTENT_SCRIPT_READY",
     });
   } catch (error) {
     logger.error("Failed to send ready message:", error);
