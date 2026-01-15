@@ -351,11 +351,22 @@ const loginBtn = document.getElementById("loginBtn");
 const googleBtn = document.getElementById("googleBtn");
 const status = document.getElementById("status");
 const logoutBtn = document.getElementById("logoutBtn");
+const loginForm = document.getElementById("loginForm");
 
-loginBtn.onclick = async () => {
+// Handle form submission instead of button click to prevent page reload
+loginForm.addEventListener("submit", async (e) => {
+  e.preventDefault(); // Prevent form from reloading the page
+
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
+
+  if (!email || !password) {
+    status.innerText = "Please enter email and password.";
+    return;
+  }
+
   try {
+    status.innerText = "Signing in...";
     const userCredential = await signInWithEmailAndPassword(
       auth,
       email,
@@ -368,7 +379,7 @@ loginBtn.onclick = async () => {
   } catch (err) {
     status.innerText = `Login error: ${err.message}`;
   }
-};
+});
 
 googleBtn.onclick = () => {
   const clientId =
@@ -402,11 +413,11 @@ googleBtn.onclick = () => {
       if (event.data.type === "oauth2callback") {
         if (event.data.error) {
           status.innerText = `OAuth error: ${event.data.error}`;
-          popup.close();
+          // Note: popup closes itself via oauth2callback.html - no need to call popup.close() here
           return;
         }
         if (event.data.accessToken) {
-          popup.close();
+          // Note: popup closes itself via oauth2callback.html - no need to call popup.close() here
           try {
             const credential = GoogleAuthProvider.credential(
               null,
@@ -471,3 +482,25 @@ logoutBtn.onclick = async () => {
     status.innerText = `Logout error: ${error.message}`;
   }
 };
+
+// Open Side Panel
+const openSidePanelBtn = document.getElementById("openSidePanelBtn");
+if (openSidePanelBtn) {
+  openSidePanelBtn.onclick = () => {
+    // Open side panel for the current window
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length > 0) {
+        // We can't directly open side panel via API from popup in all cases, 
+        // but we can request it via background or use window.close() if configured to open on action
+        // For now, we'll try to use the sidePanel.open API if available (Chrome 114+)
+        if (chrome.sidePanel && chrome.sidePanel.open) {
+          chrome.sidePanel.open({ windowId: tabs[0].windowId })
+            .catch(err => console.error("Failed to open side panel:", err));
+          window.close(); // Close popup
+        } else {
+          status.innerText = "Side Panel API not available.";
+        }
+      }
+    });
+  };
+}

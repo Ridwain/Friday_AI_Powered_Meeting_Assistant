@@ -10,28 +10,78 @@ import { htmlToText } from "html-to-text";
 import crypto from "crypto";
 import { Readable } from "stream";
 
+// Import new security and scalability modules
+import { createRateLimiter, createApiKeyValidator } from "./rate-limiter.js";
+import { RequestQueue, sharedQueue } from "./request-queue.js";
+import { sharedEmbeddingCache } from "./embedding-cache.js";
+
 dotenv.config();
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
-// CORS: allow localhost and any chrome extension IDs
+// --- SECURITY: Strict CORS Configuration ---
+// Define allowed origins (add your specific extension ID)
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:8080',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:8080',
+  'https://friday-e65f2.web.app',
+  // Add your Chrome extension ID here (get it from chrome://extensions)
+  process.env.EXTENSION_ID ? `chrome-extension://${process.env.EXTENSION_ID}` : null,
+  'chrome-extension://jmhghlacijdpjciifpobbfilakdickhb', // User's detected extension ID
+].filter(Boolean);
+
+// For development, optionally allow all chrome extensions (set ALLOW_ALL_EXTENSIONS=true in .env)
+const ALLOW_ALL_EXTENSIONS = process.env.ALLOW_ALL_EXTENSIONS === 'true';
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true); // Postman/cURL
-      if (origin.startsWith("http://localhost")) return callback(null, true);
-      if (origin.startsWith("chrome-extension://")) return callback(null, true);
+      // Allow requests with no origin (Postman, cURL, server-to-server)
+      if (!origin) return callback(null, true);
+
+      // Check if origin is in allowlist
+      if (ALLOWED_ORIGINS.includes(origin)) {
+        return callback(null, true);
+      }
+
+      // Development mode: allow all chrome extensions if configured
+      if (ALLOW_ALL_EXTENSIONS && origin.startsWith("chrome-extension://")) {
+        console.warn(`⚠️ DEV MODE: Allowing extension origin: ${origin}`);
+        return callback(null, true);
+      }
+
+      console.warn(`🚫 CORS blocked origin: ${origin}`);
       return callback(new Error("Not allowed by CORS: " + origin));
     },
     methods: ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"],
     credentials: true,
     optionsSuccessStatus: 200,
   })
 );
 
-// Add OPTIONS handlers for new routes
+// --- SECURITY: Rate Limiting ---
+const rateLimiter = createRateLimiter({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000, // 1 minute
+  maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  message: 'Too many requests. Please wait before trying again.',
+});
+
+// Apply rate limiter to all routes
+app.use(rateLimiter);
+
+// --- SECURITY: API Key Validation (optional, enable in production) ---
+const apiKeyValidator = createApiKeyValidator({
+  excludePaths: ['/health', '/stats'],
+});
+
+// Uncomment below line to enable API key validation in production
+// app.use(apiKeyValidator);
+
+// Add OPTIONS handlers for routes
 app.options("/ai/embed", cors());
 app.options("/ai/stream", cors());
 app.options("/search", cors());
@@ -40,6 +90,7 @@ app.options("/delete", cors());
 app.options("/scrape-url", cors());
 app.options("/scrape-and-upsert", cors());
 app.options("/serp/search", cors());
+app.options("/cache/stats", cors());
 
 app.use(bodyParser.json({ limit: "50mb" }));
 
@@ -84,39 +135,65 @@ function vectorIdFor(url, idx) {
   return `web_${h}_${idx}`;
 }
 
-async function getEmbedding(text) {
-  const body = {
-    model: "text-embedding-004",
-    content: {
-      parts: [{ text: text.slice(0, 8000) }],
-    },
-  };
-  let tries = 0;
-  while (tries < 3) {
-    tries++;
-    const resp = await fetchWithTimeout(
-      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      },
-      25000
-    );
-    if (resp.ok) {
-      const data = await resp.json();
-      return data.embedding?.values;
+async function getEmbedding(text, useCache = true) {
+  const trimmedText = text.slice(0, 8000);
+
+  // Check cache first
+  if (useCache) {
+    const cached = sharedEmbeddingCache.get(trimmedText);
+    if (cached) {
+      console.log('📦 Embedding cache hit');
+      return cached;
     }
-    if (resp.status === 429 || resp.status >= 500) {
-      await new Promise((r) =>
-        setTimeout(r, 400 * Math.pow(2, tries) + Math.random() * 200)
-      );
-      continue;
-    }
-    const errText = await resp.text().catch(() => "");
-    throw new Error(`Gemini embeddings failed: ${resp.status} ${errText}`);
   }
-  throw new Error("Gemini embeddings failed after retries");
+
+  // Use request queue for API call with retry logic
+  const embedding = await sharedQueue.enqueue(async () => {
+    const body = {
+      model: "text-embedding-004",
+      content: {
+        parts: [{ text: trimmedText }],
+      },
+    };
+
+    let tries = 0;
+    while (tries < 3) {
+      tries++;
+      const resp = await fetchWithTimeout(
+        `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+        25000
+      );
+
+      if (resp.ok) {
+        const data = await resp.json();
+        return data.embedding?.values;
+      }
+
+      if (resp.status === 429 || resp.status >= 500) {
+        await new Promise((r) =>
+          setTimeout(r, 400 * Math.pow(2, tries) + Math.random() * 200)
+        );
+        continue;
+      }
+
+      const errText = await resp.text().catch(() => "");
+      throw new Error(`Gemini embeddings failed: ${resp.status} ${errText}`);
+    }
+    throw new Error("Gemini embeddings failed after retries");
+  }, { id: `embed_${Date.now()}` });
+
+  // Cache the result
+  if (embedding && useCache) {
+    sharedEmbeddingCache.set(trimmedText, embedding);
+    console.log('💾 Embedding cached');
+  }
+
+  return embedding;
 }
 
 // --- Health ---
@@ -344,6 +421,16 @@ app.get("/stats", async (req, res) => {
       details: error.message,
     });
   }
+});
+
+// --- Cache & Queue Stats ---
+app.get("/cache/stats", (req, res) => {
+  res.json({
+    success: true,
+    embeddingCache: sharedEmbeddingCache.getStats(),
+    requestQueue: sharedQueue.getStats(),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // --- NEW: /scrape-url ---
@@ -597,11 +684,11 @@ app.post("/ai/stream", async (req, res) => {
       // Only include system instruction if you have any
       ...(systemText
         ? {
-            systemInstruction: {
-              role: "system",
-              parts: [{ text: systemText }],
-            },
-          }
+          systemInstruction: {
+            role: "system",
+            parts: [{ text: systemText }],
+          },
+        }
         : {}),
       contents,
       generationConfig: {
@@ -643,14 +730,14 @@ app.post("/ai/stream", async (req, res) => {
     const heartbeat = setInterval(() => {
       try {
         res.write(": ping\n\n");
-      } catch {}
+      } catch { }
     }, 15000);
 
     const onEnd = () => {
       clearInterval(heartbeat);
       try {
         res.end();
-      } catch {}
+      } catch { }
     };
     const onError = (err) => {
       clearInterval(heartbeat);
@@ -661,10 +748,10 @@ app.post("/ai/stream", async (req, res) => {
             details: String(err),
           })}\n\n`
         );
-      } catch {}
+      } catch { }
       try {
         res.end();
-      } catch {}
+      } catch { }
     };
 
     const body = upstream.body;
@@ -696,10 +783,10 @@ app.post("/ai/stream", async (req, res) => {
           details: String(e),
         })}\n\n`
       );
-    } catch {}
+    } catch { }
     try {
       res.end();
-    } catch {}
+    } catch { }
   }
 });
 
@@ -721,39 +808,50 @@ app.use((req, res) => {
     availableRoutes: [
       "GET /health",
       "GET /stats",
+      "GET /cache/stats",
       "POST /search",
       "POST /upsert",
       "POST /delete",
       "POST /scrape-url",
       "POST /scrape-and-upsert",
       "POST /serp/search",
-      "POST /ai/embed", // NEW
+      "POST /ai/embed",
       "POST /ai/stream",
     ],
   });
 });
 
 app.listen(port, () => {
-  console.log(`🚀 Semantic search server running at http://localhost:${port}`);
-  console.log(`📊 Pinecone Index: ${PINECONE_INDEX}`);
-  //console.log(`🌍 Environment: ${PINECONE_ENVIRONMENT}`);
-  console.log("\nAvailable endpoints:");
-  console.log(`  GET  http://localhost:${port}/health`);
-  console.log(`  GET  http://localhost:${port}/stats`);
-  console.log(`  POST http://localhost:${port}/search`);
-  console.log(`  POST http://localhost:${port}/upsert`);
-  console.log(`  POST http://localhost:${port}/delete`);
-  console.log(`  POST http://localhost:${port}/scrape-url`);
-  console.log(`  POST http://localhost:${port}/scrape-and-upsert`);
-  console.log(`  POST http://localhost:${port}/serp/search`);
+  console.log(`\n🚀 Friday Backend Server v2.0 (MVP)`);
+  console.log(`   Running at http://localhost:${port}`);
+  console.log(`\n📊 Pinecone Index: ${PINECONE_INDEX}`);
+  console.log(`\n🔒 Security Features:`);
+  console.log(`   - Strict CORS: ${ALLOW_ALL_EXTENSIONS ? 'DEV MODE (all extensions allowed)' : 'Production (allowlist only)'}`);
+  console.log(`   - Rate Limiting: ${process.env.RATE_LIMIT_MAX_REQUESTS || 100} req/min`);
+  console.log(`   - Embedding Cache: Max ${process.env.EMBEDDING_CACHE_MAX_SIZE || 1000} entries`);
+  console.log(`\n📡 Available endpoints:`);
+  console.log(`   GET  /health        - Health check`);
+  console.log(`   GET  /stats         - Pinecone stats`);
+  console.log(`   GET  /cache/stats   - Cache & queue stats`);
+  console.log(`   POST /search        - Semantic search`);
+  console.log(`   POST /upsert        - Upsert vectors`);
+  console.log(`   POST /delete        - Delete vectors`);
+  console.log(`   POST /scrape-url    - Scrape webpage`);
+  console.log(`   POST /scrape-and-upsert - Scrape & index`);
+  console.log(`   POST /serp/search   - Web search`);
+  console.log(`   POST /ai/embed      - Get embeddings`);
+  console.log(`   POST /ai/stream     - Chat completion`);
+  console.log(`\n✅ Server ready!\n`);
 });
 
 process.on("SIGINT", () => {
   console.log("\n🛑 Gracefully shutting down server...");
+  sharedEmbeddingCache.destroy();
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
   console.log("\n🛑 Gracefully shutting down server...");
+  sharedEmbeddingCache.destroy();
   process.exit(0);
 });

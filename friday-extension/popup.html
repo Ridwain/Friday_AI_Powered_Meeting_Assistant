@@ -1,140 +1,502 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Login</title>
-    <style>
-      body {
-        font-family: "Segoe UI", sans-serif;
-        margin: 0;
-        padding: 20px;
-        background-color: #f4f4f4;
-        width: 400px;
-        overflow-x: hidden;
-        color: #222;
+<html lang="en" data-theme="light">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Friday - AI Meeting Assistant</title>
+  <!-- Apply saved theme immediately to prevent flash -->
+  <script src="theme-manager.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* === Page-Specific Styles === */
+    body {
+      width: 420px;
+      min-height: 520px;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Gradient Header */
+    .login-header {
+      background: var(--friday-gradient);
+      padding: var(--space-8) var(--space-5) var(--space-6);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Animated background particles */
+    .login-header::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 40% 60%, rgba(255, 255, 255, 0.05) 0%, transparent 40%);
+      animation: float 20s ease-in-out infinite;
+    }
+
+    @keyframes float {
+
+      0%,
+      100% {
+        transform: translateY(0) rotate(0deg);
       }
 
-      h3 {
-        margin-bottom: 10px;
+      50% {
+        transform: translateY(-10px) rotate(1deg);
+      }
+    }
+
+    .login-header .logo-wrapper {
+      position: relative;
+      z-index: 1;
+      display: inline-block;
+    }
+
+    .login-header .logo {
+      width: 72px;
+      height: 72px;
+      border-radius: var(--radius-xl);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+      margin-bottom: var(--space-3);
+      animation: logoIn 0.6s var(--ease-spring);
+    }
+
+    @keyframes logoIn {
+      from {
+        opacity: 0;
+        transform: scale(0.5) translateY(20px);
       }
 
-      input[type="email"],
-      input[type="password"] {
-        width: calc(100% - 24px); /* Prevent overflow due to padding */
-        padding: 10px;
-        margin-bottom: 10px;
-        border: 2px solid #ccc;
-        border-radius: 6px;
-        font-size: 14px;
-        background-color: #fff;
-        transition: border-color 0.2s ease;
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
       }
+    }
 
-      input[type="email"]:focus,
-      input[type="password"]:focus {
-        border-color: #222;
-        outline: none;
-      }
+    .login-header h1 {
+      color: white;
+      font-size: var(--text-2xl);
+      font-weight: var(--font-bold);
+      margin-bottom: var(--space-1);
+      position: relative;
+      z-index: 1;
+      animation: slideUp 0.5s var(--ease-out) 0.1s both;
+    }
 
-      .button-group {
-        display: flex;
-        gap: 12px;
-        margin-top: 10px;
-        margin-bottom: 20px;
-      }
+    .login-header .tagline {
+      color: rgba(255, 255, 255, 0.85);
+      font-size: var(--text-sm);
+      position: relative;
+      z-index: 1;
+      animation: slideUp 0.5s var(--ease-out) 0.2s both;
+    }
 
-      .button-group button {
-        flex: 1;
-        padding: 10px 16px;
-        font-size: 14px;
-        border-radius: 6px;
-        border: none;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-        font-weight: 500;
-        font-family: "Segoe UI", sans-serif;
-      }
+    /* Main Content Area */
+    .login-content {
+      flex: 1;
+      padding: var(--space-6) var(--space-5);
+      animation: fadeIn 0.5s var(--ease-out) 0.3s both;
+    }
 
-      #loginBtn {
-        background-color: #5cb85c; /* light green */
-        color: #fff;
-      }
+    /* Form Styling */
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
 
-      #loginBtn:hover {
-        background-color: #4cae4c;
-      }
+    .input-wrapper {
+      position: relative;
+    }
 
-      #googleBtn {
-        background-color: #5bc0de; /* light blue */
-        color: #fff;
-      }
+    .input-icon {
+      position: absolute;
+      left: var(--space-4);
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: var(--text-base);
+      color: var(--text-muted);
+      pointer-events: none;
+      transition: color var(--duration-fast);
+    }
 
-      #googleBtn:hover {
-        background-color: #31b0d5;
-      }
+    .login-form input {
+      width: 100%;
+      padding: var(--space-4);
+      padding-left: calc(var(--space-4) + var(--space-6) + var(--space-1));
+      font-family: var(--font-sans);
+      font-size: var(--text-sm);
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-lg);
+      outline: none;
+      transition: all var(--duration-fast);
+    }
 
-      #status {
-        margin-top: 10px;
-        font-size: 14px;
-        color: #444;
-      }
+    .login-form input::placeholder {
+      color: var(--text-muted);
+    }
 
-      #meetings {
-        margin-top: 20px;
-      }
+    .login-form input:hover {
+      border-color: var(--border-strong);
+    }
 
-      #meetings div {
-        padding: 10px;
-        background-color: #fff;
-        border: 1px solid #ccc;
-        border-radius: 6px;
-        margin-bottom: 10px;
-        font-size: 14px;
-      }
+    .login-form input:focus {
+      border-color: var(--friday-primary);
+      background: var(--bg-secondary);
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+    }
 
-      #meetings a {
-        color: #0077cc;
-        text-decoration: none;
-      }
+    .login-form input:focus+.input-icon,
+    .input-wrapper:focus-within .input-icon {
+      color: var(--friday-primary);
+    }
 
-      #meetings a:hover {
-        text-decoration: underline;
-      }
+    /* Buttons */
+    .login-btn {
+      width: 100%;
+      padding: var(--space-4);
+      font-family: var(--font-sans);
+      font-size: var(--text-sm);
+      font-weight: var(--font-semibold);
+      border: none;
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      transition: all var(--duration-normal) var(--ease-out);
+    }
 
-      #logoutBtn {
-        padding: 10px 16px;
-        font-size: 14px;
-        border-radius: 6px;
-        border: none;
-        background-color: #222;
-        color: #fff;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-        width: 100%;
-      }
+    .login-btn-primary {
+      background: var(--friday-gradient);
+      color: white;
+      box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+    }
 
-      #logoutBtn:hover {
-        background-color: #555;
-      }
-    </style>
-  </head>
+    .login-btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(124, 58, 237, 0.45);
+    }
 
-  <body>
-    <h3>Email Login</h3>
-    <input id="email" type="email" placeholder="Email" />
-    <input id="password" type="password" placeholder="Password" />
+    .login-btn-primary:active {
+      transform: translateY(0);
+    }
 
-    <div class="button-group">
-      <button id="loginBtn">Login</button>
-      <button id="googleBtn">Sign in with Google</button>
+    .login-btn-google {
+      background: var(--bg-glass);
+      color: var(--text-primary);
+      border: 1px solid var(--border-default);
+      backdrop-filter: blur(8px);
+    }
+
+    .login-btn-google:hover {
+      background: var(--bg-tertiary);
+      border-color: var(--border-strong);
+    }
+
+    .login-btn-google .google-icon {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Divider */
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      margin: var(--space-4) 0;
+      color: var(--text-muted);
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border-default);
+    }
+
+    /* Status Message */
+    #status {
+      text-align: center;
+      font-size: var(--text-sm);
+      min-height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+    }
+
+    #status:empty {
+      display: none;
+    }
+
+    #status.error {
+      color: var(--error);
+    }
+
+    #status.success {
+      color: var(--success);
+    }
+
+    #status.loading {
+      color: var(--text-secondary);
+    }
+
+    /* Spinner */
+    .spinner-inline {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border-default);
+      border-top-color: var(--friday-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+
+    /* Logged In State */
+    .logged-in-section {
+      display: none;
+      animation: fadeIn var(--duration-normal) var(--ease-out);
+    }
+
+    .logged-in-section.active {
+      display: block;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-4);
+      background: var(--bg-tertiary);
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--space-5);
+    }
+
+    .user-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-full);
+      background: var(--friday-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--text-xl);
+      font-weight: var(--font-semibold);
+      color: white;
+    }
+
+    .user-details {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .user-name {
+      font-weight: var(--font-semibold);
+      color: var(--text-primary);
+      margin-bottom: var(--space-1);
+    }
+
+    .user-email {
+      font-size: var(--text-xs);
+      color: var(--text-tertiary);
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .meetings-list {
+      margin-bottom: var(--space-5);
+    }
+
+    .meetings-list h4 {
+      font-size: var(--text-sm);
+      color: var(--text-secondary);
+      margin-bottom: var(--space-3);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .meeting-item {
+      padding: var(--space-3) var(--space-4);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-2);
+      font-size: var(--text-sm);
+    }
+
+    .meeting-item a {
+      color: var(--friday-primary-light);
+    }
+
+    #logoutBtn {
+      width: 100%;
+      padding: var(--space-4);
+      font-family: var(--font-sans);
+      font-size: var(--text-sm);
+      font-weight: var(--font-medium);
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      transition: all var(--duration-fast);
+    }
+
+    #logoutBtn:hover {
+      background: var(--error-bg);
+      border-color: var(--error-border);
+      color: var(--error);
+    }
+
+    /* Loading overlay */
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg-glass-heavy);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .loading-overlay.active {
+      display: flex;
+    }
+
+    .loading-content {
+      text-align: center;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border-default);
+      border-top-color: var(--friday-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto var(--space-4);
+    }
+
+    /* Signup Footer */
+    .signup-footer {
+      margin-top: var(--space-5);
+      text-align: center;
+      font-size: var(--text-xs);
+      color: var(--text-tertiary);
+    }
+
+    .signup-link {
+      color: var(--friday-primary-light);
+      text-decoration: none;
+      font-weight: var(--font-medium);
+    }
+
+    .signup-link:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Gradient Header -->
+  <header class="login-header">
+    <div class="logo-wrapper">
+      <img src="friday.png" alt="Friday" class="logo" />
     </div>
+    <h1>Friday</h1>
+    <p class="tagline">✨ AI-Powered Meeting Assistant</p>
+  </header>
 
-    <p id="status"></p>
+  <!-- Main Content -->
+  <main class="login-content">
+    <!-- Login Form (shown when logged out) -->
+    <section id="loginSection">
+      <form class="login-form" id="loginForm">
+        <div class="input-wrapper">
+          <input id="email" type="email" placeholder="Email address" autocomplete="email" />
+          <span class="input-icon">📧</span>
+        </div>
 
-    <div id="meetings"></div>
+        <div class="input-wrapper">
+          <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+          <span class="input-icon">🔒</span>
+        </div>
 
-    <button id="logoutBtn" style="display: none">Logout</button>
+        <button type="submit" id="loginBtn" class="login-btn login-btn-primary">
+          <span>🚀</span>
+          Sign In
+        </button>
+      </form>
 
-    <script type="module" src="popup.js"></script>
-  </body>
+      <div class="divider">or continue with</div>
+
+      <button id="googleBtn" class="login-btn login-btn-google">
+        <svg class="google-icon" viewBox="0 0 24 24">
+          <path fill="#4285F4"
+            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+          <path fill="#34A853"
+            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+          <path fill="#FBBC05"
+            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+          <path fill="#EA4335"
+            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+        </svg>
+        Sign in with Google
+      </button>
+
+      <div class="signup-footer">
+        Don't have an account? <a href="https://friday-e65f2.web.app" target="_blank" class="signup-link">Create one
+          here</a>
+      </div>
+
+      <p id="status"></p>
+    </section>
+
+    <!-- Logged In Section (hidden by default) -->
+    <section id="loggedInSection" class="logged-in-section">
+      <div class="user-info">
+        <div class="user-avatar" id="userAvatar">U</div>
+        <div class="user-details">
+          <div class="user-name" id="userName">User</div>
+          <div class="user-email" id="userEmail">user@email.com</div>
+        </div>
+      </div>
+
+      <div class="meetings-list">
+        <h4>📅 Your Meetings</h4>
+        <div id="meetings"></div>
+      </div>
+
+      <button id="logoutBtn">Sign Out</button>
+    </section>
+  </main>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <p style="color: var(--text-secondary);">Signing you in...</p>
+    </div>
+  </div>
+
+
+  <script type="module" src="popup.js"></script>
+</body>
+
 </html>

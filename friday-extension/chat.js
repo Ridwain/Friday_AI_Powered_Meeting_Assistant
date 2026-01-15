@@ -1,43 +1,25 @@
-import { db } from "./firebase-config.js";
-import {
-  collection,
-  addDoc,
-  serverTimestamp,
-  query,
-  orderBy,
-  getDocs,
-  getDoc,
-  doc,
-  setDoc,
-  updateDoc,
-} from "./firebase/firebase-firestore.js";
-import {
-  initWebScraper,
-  isUrlLike,
-  scrapeUrl,
-  scrapeAndUpsert,
-  serpSearch,
-  detectWebSearchyQuery,
-  indexUrlsFromFiles,
-  buildMessagesForUrlQA,
-} from "./web-scraper.js";
+import { CONFIG } from "./config.js";
 
-// --- Typewriter streaming helper (word-by-word with caret + auto-scroll) ---
-(function ensureTypewriterStyle() {
-  if (document.getElementById("typewriter-style")) return;
-  const st = document.createElement("style");
-  st.id = "typewriter-style";
-  st.textContent = `
-    .ai-bubble.typing::after {
-      content: '▍';
-      animation: blink 1s steps(1) infinite;
-      margin-left: 2px;
-      opacity: 0.6;
-    }
-    @keyframes blink { 50% { opacity: 0; } }
-  `;
-  document.head.appendChild(st);
-})();
+// Lazy Load Variables
+let db;
+let collection, addDoc, serverTimestamp, query, orderBy, getDocs, getDoc, doc, setDoc, updateDoc;
+let initWebScraper, isUrlLike, scrapeUrl, scrapeAndUpsert, serpSearch, detectWebSearchyQuery, indexUrlsFromFiles, buildMessagesForUrlQA;
+
+async function loadDependencies() {
+  if (db) return;
+  const [fbConfig, fbFirestore, webScraper] = await Promise.all([
+    import("./firebase-config.js"),
+    import("./firebase/firebase-firestore.js"),
+    import("./web-scraper.js")
+  ]);
+
+  db = fbConfig.db;
+
+  ({ collection, addDoc, serverTimestamp, query, orderBy, getDocs, getDoc, doc, setDoc, updateDoc } = fbFirestore);
+  ({ initWebScraper, isUrlLike, scrapeUrl, scrapeAndUpsert, serpSearch, detectWebSearchyQuery, indexUrlsFromFiles, buildMessagesForUrlQA } = webScraper);
+}
+
+// Typewriter CSS is now inline in chat.html for faster load
 
 // rAF throttle so we don't spam layout
 function rafThrottle(fn) {
@@ -49,7 +31,7 @@ function rafThrottle(fn) {
       scheduled = false;
       try {
         fn(...args);
-      } catch {}
+      } catch { }
     });
   };
 }
@@ -136,13 +118,13 @@ function makeTypewriter(targetEl, { wps = 9, onTick } = {}) {
 // --- end typewriter helper ---
 
 const RAG_CONFIG = {
-  SERVER_URL: "http://localhost:3000",
-  MAX_RESULTS: 5,
-  SIMILARITY_THRESHOLD: 0.7,
+  SERVER_URL: CONFIG.SERVER_URL,
+  MAX_RESULTS: CONFIG.RAG.MAX_RESULTS,
+  SIMILARITY_THRESHOLD: CONFIG.RAG.SIMILARITY_THRESHOLD,
 };
 // latency knobs
-const SEARCH_TIMEOUT_MS = 1500; // per-namespace hard timeout
-const FAST_HIT_THRESHOLD = 0.88; // short-circuit if one hit is very strong
+const SEARCH_TIMEOUT_MS = CONFIG.RAG.SEARCH_TIMEOUT_MS;
+const FAST_HIT_THRESHOLD = CONFIG.RAG.FAST_HIT_THRESHOLD;
 
 let conversationHistory = [];
 const MAX_CONVERSATION_HISTORY = 10;
@@ -155,8 +137,7 @@ async function loadUploadedFilesList() {
   if (result[UPLOAD_TRACKER_KEY]) {
     uploadedFiles = result[UPLOAD_TRACKER_KEY];
     console.log(
-      `📦 Using cached file list with ${
-        Object.keys(uploadedFiles).length
+      `📦 Using cached file list with ${Object.keys(uploadedFiles).length
       } entries`
     );
   } else {
@@ -168,8 +149,7 @@ async function loadUploadedFilesList() {
 async function saveUploadedFilesList() {
   await chrome.storage.local.set({ [UPLOAD_TRACKER_KEY]: uploadedFiles });
   console.log(
-    `✅ Updated cached file list with ${
-      Object.keys(uploadedFiles).length
+    `✅ Updated cached file list with ${Object.keys(uploadedFiles).length
     } entries`
   );
 }
@@ -181,17 +161,298 @@ function normalizeFilename(name) {
     .replace(/[^\w\s.-]/g, "");
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  // Initialize Speech Recognition
+
+document.addEventListener("DOMContentLoaded", async () => {
+  // Main chat interface code - DECLARE VARIABLES FIRST
+  let chatMessages = document.getElementById("chatMessages");
+  let chatInput = document.getElementById("chatInput");
+  let micBtn = document.getElementById("micBtn");
+  let voiceReplyToggle = document.getElementById("voiceReplyToggle");
+  let sendBtn = document.getElementById("sendBtn");
+
+  let synth = window.speechSynthesis;
+  let recognition;
+  let isMicActive = false;
+  let selectedMeeting = null;
+  let userUid = null;
+  let isProcessing = false;
+  const filesContentMap = {};
+
+  // 🚀 FAST PATH: Load data immediately - PARALLEL storage reads
+  // This ensures UI feels instant even if other components take time
+  try {
+    // Remove loading skeleton as soon as JS runs
+    const skeleton = document.getElementById("loadingSkeleton");
+
+    const result = await chrome.storage.local.get(["selectedMeetingForChat", "uid", "chatSessionActive"]);
+    if (result.selectedMeetingForChat && result.uid) {
+      selectedMeeting = result.selectedMeetingForChat;
+      userUid = result.uid;
+
+      if (selectedMeeting.meetingId && result.chatSessionActive === true) {
+        console.log("🚀 Starting fast chat load...");
+        loadChatHistory(userUid, selectedMeeting.meetingId);
+      } else {
+        showWelcomeState();
+      }
+    } else {
+      showWelcomeState();
+    }
+
+    // Remove skeleton after initial state is determined
+    if (skeleton) skeleton.remove();
+  } catch (e) {
+    console.error("Fast load error:", e);
+    const skeleton = document.getElementById("loadingSkeleton");
+    if (skeleton) skeleton.remove();
+  }
+
+  // Helper to append a message to the UI
+  function appendMessage(role, content, timestamp) {
+    const chatContainer = document.getElementById("chatMessages");
+    if (!chatContainer) return;
+
+    const bubble = document.createElement("div");
+    bubble.className = `chat-bubble ${role === "user" ? "user-bubble" : "ai-bubble"}`;
+    bubble.innerHTML = linkify(content);
+
+    // Add timestamp tooltip if available
+    if (timestamp) {
+      bubble.title = new Date(timestamp).toLocaleString();
+    }
+
+    chatContainer.appendChild(bubble);
+  }
+
+  // Helper to scroll chat container to bottom
+  function scrollToBottom(smooth = true) {
+    const chatContainer = document.getElementById("chatMessages");
+    if (!chatContainer) return;
+
+    // Immediate scroll
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    // Ensure it happens after paint (for images/rendering lag)
+    requestAnimationFrame(() => {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+      setTimeout(() => {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }, 50);
+    });
+  }
+
+  // Performance constants
+  const MAX_VISIBLE_MESSAGES = 50;  // Only render last 50 in DOM
+  const MAX_CACHED_MESSAGES = 200;  // Limit cache size
+  let allMessages = []; // Full history for "load more"
+  let visibleStartIndex = 0; // Track where visible window starts
+
+  async function loadChatHistory(uid, meetingId) {
+    const chatContainer = document.getElementById("chatMessages");
+    const CACHE_KEY = `chat_cache_${uid}_${meetingId}`;
+
+    // Helper: Render messages using DocumentFragment (batch DOM update)
+    function renderMessages(messages, prepend = false) {
+      const fragment = document.createDocumentFragment();
+
+      messages.forEach(msg => {
+        const bubble = document.createElement("div");
+        bubble.className = `chat-bubble ${msg.role === "user" ? "user-bubble" : "ai-bubble"}`;
+        bubble.innerHTML = linkify(msg.content);
+        if (msg.timestamp) {
+          bubble.title = new Date(msg.timestamp).toLocaleString();
+        }
+        fragment.appendChild(bubble);
+      });
+
+      if (prepend && chatContainer.firstChild) {
+        chatContainer.insertBefore(fragment, chatContainer.firstChild);
+      } else {
+        chatContainer.appendChild(fragment);
+      }
+    }
+
+    // Helper: Add "Load Earlier Messages" button
+    function addLoadMoreButton() {
+      // Remove existing button if any
+      const existing = chatContainer.querySelector(".load-more-btn");
+      if (existing) existing.remove();
+
+      if (visibleStartIndex <= 0) return; // No more to load
+
+      const btn = document.createElement("button");
+      btn.className = "load-more-btn";
+      btn.textContent = `Load ${Math.min(MAX_VISIBLE_MESSAGES, visibleStartIndex)} earlier messages`;
+      btn.style.cssText = "width:100%;padding:10px;margin-bottom:10px;background:#f0f0f0;border:1px solid #ccc;border-radius:8px;cursor:pointer;";
+      btn.onclick = () => {
+        const loadCount = Math.min(MAX_VISIBLE_MESSAGES, visibleStartIndex);
+        const newStart = visibleStartIndex - loadCount;
+        const olderMessages = allMessages.slice(newStart, visibleStartIndex);
+        visibleStartIndex = newStart;
+
+        // Remember scroll position
+        const scrollHeight = chatContainer.scrollHeight;
+
+        // Render older messages at top
+        btn.remove();
+        renderMessages(olderMessages, true);
+        addLoadMoreButton();
+
+        // Maintain scroll position
+        chatContainer.scrollTop = chatContainer.scrollHeight - scrollHeight;
+      };
+
+      chatContainer.insertBefore(btn, chatContainer.firstChild);
+    }
+
+    // 1. Try to load from local cache IMMEDIATELY
+    try {
+      const cached = await chrome.storage.local.get(CACHE_KEY);
+      if (cached[CACHE_KEY] && Array.isArray(cached[CACHE_KEY])) {
+        console.log("⚡ Loaded chat history from cache");
+        allMessages = cached[CACHE_KEY];
+        conversationHistory = allMessages;
+
+        // Only render LAST N messages for performance
+        chatContainer.innerHTML = '';
+        const messagesToShow = allMessages.slice(-MAX_VISIBLE_MESSAGES);
+        visibleStartIndex = Math.max(0, allMessages.length - MAX_VISIBLE_MESSAGES);
+
+        renderMessages(messagesToShow);
+        addLoadMoreButton();
+        scrollToBottom(false);
+      }
+    } catch (e) {
+      console.warn("Cache load failed:", e);
+    }
+
+    // 2. Fetch fresh data from Firestore (background update)
+    await loadDependencies();
+    const chatRef = collection(db, "users", uid, "meetings", meetingId, "chats");
+    const q = query(chatRef, orderBy("timestamp", "asc"));
+
+    try {
+      const snapshot = await getDocs(q);
+      const freshHistory = [];
+
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        freshHistory.push({
+          role: data.role,
+          content: data.content,
+          timestamp: data.timestamp ? data.timestamp.toDate().toISOString() : new Date().toISOString()
+        });
+      });
+
+      allMessages = freshHistory;
+      conversationHistory = freshHistory;
+
+      // Render only last N messages
+      chatContainer.innerHTML = '';
+      const messagesToShow = freshHistory.slice(-MAX_VISIBLE_MESSAGES);
+      visibleStartIndex = Math.max(0, freshHistory.length - MAX_VISIBLE_MESSAGES);
+
+      renderMessages(messagesToShow);
+      addLoadMoreButton();
+      scrollToBottom(true);
+
+      // Cache with size limit
+      const cacheData = freshHistory.length > MAX_CACHED_MESSAGES
+        ? freshHistory.slice(-MAX_CACHED_MESSAGES)
+        : freshHistory;
+      chrome.storage.local.set({ [CACHE_KEY]: cacheData });
+
+      console.log(`✅ Loaded ${freshHistory.length} messages, displaying ${messagesToShow.length}`);
+
+    } catch (err) {
+      console.error("❌ Failed to load chat history:", err);
+    }
+  }
+
+  // NOTE: Initial load is now handled above in the FAST PATH section
+  // This listener only handles CHANGES after initial load
+
+  // 🎧 LISTEN FOR STORAGE CHANGES (e.g. Back button clicked in dashboard)
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local") {
+      // Handle Activation Change (User clicked "Ask AI")
+      if (changes.chatSessionActive) {
+        if (changes.chatSessionActive.newValue === true) {
+          // User just clicked "Ask AI" - Load the chat!
+          console.log("🚀 Chat Activated by User");
+          // Fetch latest meeting just in case
+          chrome.storage.local.get(["selectedMeetingForChat", "uid"], (res) => {
+            if (res.selectedMeetingForChat && res.uid) {
+              selectedMeeting = res.selectedMeetingForChat;
+              userUid = res.uid;
+              loadChatHistory(userUid, selectedMeeting.meetingId);
+            }
+          });
+        } else {
+          // Deactivated (e.g. Back button)
+          showWelcomeState();
+        }
+      }
+
+      if (changes.selectedMeetingForChat) {
+        const newValue = changes.selectedMeetingForChat.newValue;
+        const oldValue = changes.selectedMeetingForChat.oldValue;
+
+        if (!newValue) {
+          // Meeting deslected (User clicked Back) -> Clear Chat
+          console.log("👋 Meeting deselected, resetting chat...");
+          selectedMeeting = null;
+          chatMessages.innerHTML = "";
+          showWelcomeState();
+        } else if (newValue && newValue.meetingId !== selectedMeeting?.meetingId) {
+          // New meeting selected - Only load if already active
+          selectedMeeting = newValue;
+
+          chrome.storage.local.get("chatSessionActive", (res) => {
+            if (res.chatSessionActive === true) {
+              console.log("🔄 New meeting selected & active, reloading chat...");
+              chatMessages.innerHTML = "";
+              if (userUid) loadChatHistory(userUid, selectedMeeting.meetingId);
+            } else {
+              console.log("🔄 New meeting selected but inactive. Waiting for user to click button.");
+              showWelcomeState();
+            }
+          });
+        }
+      }
+
+      // Also update UID if it changes (just in case)
+      if (changes.uid) {
+        userUid = changes.uid.newValue;
+      }
+    }
+  });
+
+  function showWelcomeState() {
+    chatMessages.innerHTML = "";
+    const welcomeDiv = document.createElement("div");
+    welcomeDiv.className = "welcome-message";
+    welcomeDiv.innerHTML = `
+      <div class="welcome-icon-wrapper">
+        <span class="welcome-icon">🤖</span>
+      </div>
+      <h3>Ready to Chat?</h3>
+      <p>Please click the <strong>"Ask AI"</strong> button in the extension dashboard to start a conversation.</p>
+    `;
+    chatMessages.appendChild(welcomeDiv);
+  }
+
+
+
+  // Initialize Speech Recognition & Scraper in background
   (async () => {
     try {
-      await initWebScraper();
-    } catch (e) {
-      console.warn("web-scraper init failed (non-fatal):", e);
-    }
+      await loadDependencies();
+      initWebScraper().catch(e => console.warn("web-scraper init failed:", e));
+    } catch (e) { console.warn("init failed:", e); }
   })();
 
-  // Function to load transcript (updated to handle new format)
+  // Function to load transcript
   async function loadTranscript(uid, meetingId) {
     try {
       const transcriptsRef = collection(
@@ -232,8 +493,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
-          `Server embedding error: ${response.status} - ${
-            errorData.error || "Unknown error"
+          `Server embedding error: ${response.status} - ${errorData.error || "Unknown error"
           }`
         );
       }
@@ -286,8 +546,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const result = await response.json();
       console.log(
-        `✅ Successfully uploaded ${
-          result.upsertedCount || vectors.length
+        `✅ Successfully uploaded ${result.upsertedCount || vectors.length
         } vectors from ${filename}`
       );
       return result;
@@ -340,7 +599,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (activeSearchAborter) {
       try {
         activeSearchAborter.abort();
-      } catch {}
+      } catch { }
     }
   }
 
@@ -501,8 +760,8 @@ Rules:
 
 Tagged snippets:
 ${taggedSnips
-  .map((s) => `[#${s.tag}] ${s.text}\n— source: ${s.source}`)
-  .join("\n\n")}
+            .map((s) => `[#${s.tag}] ${s.text}\n— source: ${s.source}`)
+            .join("\n\n")}
 
 Return ONLY the bullet points.`,
       },
@@ -918,13 +1177,13 @@ Answer:`,
         transcriptResults =
           queryEmbedding && selectedMeeting?.meetingId
             ? await performRAGSearchWithEmbedding(
-                queryEmbedding,
-                selectedMeeting.meetingId,
-                { signal }
-              )
+              queryEmbedding,
+              selectedMeeting.meetingId,
+              { signal }
+            )
             : await performRAGSearch(input, selectedMeeting?.meetingId, {
-                signal,
-              }); // fallback
+              signal,
+            }); // fallback
 
         if (transcriptResults.length > 0) {
           context = "MEETING TRANSCRIPT CONTEXT:\n\n";
@@ -965,10 +1224,10 @@ Answer:`,
       try {
         documentResults = queryEmbedding
           ? await performRAGSearchWithEmbedding(
-              queryEmbedding,
-              "meeting-assistant",
-              { signal }
-            ) // default/doc namespace
+            queryEmbedding,
+            "meeting-assistant",
+            { signal }
+          ) // default/doc namespace
           : await performRAGSearch(input, "meeting-assistant", { signal }); // fallback
         if (documentResults.length > 0) {
           context = "GOOGLE DRIVE FILES CONTEXT:\n\n";
@@ -1758,100 +2017,6 @@ Answer:`,
     return matches;
   }
 
-  // Chat message functions
-  async function saveChatMessage(uid, meetingId, role, content) {
-    try {
-      const chatRef = collection(
-        db,
-        "users",
-        uid,
-        "meetings",
-        meetingId,
-        "chats"
-      );
-      await addDoc(chatRef, {
-        role,
-        content,
-        timestamp: serverTimestamp(),
-      });
-    } catch (err) {
-      console.error("❌ Failed to save chat message:", err);
-    }
-  }
-
-  async function loadChatHistory(uid, meetingId) {
-    const chatRef = collection(
-      db,
-      "users",
-      uid,
-      "meetings",
-      meetingId,
-      "chats"
-    );
-    const q = query(chatRef, orderBy("timestamp", "asc"));
-
-    try {
-      conversationHistory = [];
-
-      const snapshot = await getDocs(q);
-      snapshot.forEach((doc) => {
-        const { role, content } = doc.data();
-
-        conversationHistory.push({ role, content });
-
-        const bubble = document.createElement("div");
-        bubble.className = `chat-bubble ${
-          role === "user" ? "user-bubble" : "ai-bubble"
-        }`;
-        bubble.innerHTML = linkify(content);
-        chatMessages.appendChild(bubble);
-      });
-
-      if (conversationHistory.length > MAX_CONVERSATION_HISTORY * 2) {
-        conversationHistory = conversationHistory.slice(
-          -MAX_CONVERSATION_HISTORY * 2
-        );
-      }
-
-      // ✅ FIXED: Scroll after loading history
-      scrollToBottom(true);
-      console.log(
-        `📚 Loaded ${conversationHistory.length} messages into conversation context`
-      );
-    } catch (err) {
-      console.error("❌ Failed to load chat history:", err);
-    }
-  }
-
-  // Main chat interface code - DECLARE VARIABLES FIRST
-  let chatMessages, chatInput, micBtn, voiceReplyToggle, sendBtn;
-  let synth, recognition;
-  let isMicActive = false;
-  let selectedMeeting = null;
-  let userUid = null;
-  let isProcessing = false;
-  const filesContentMap = {};
-
-  function scrollToBottom(forceScroll = false) {
-    if (!chatMessages) return;
-
-    // Use requestAnimationFrame to ensure DOM has updated
-    requestAnimationFrame(() => {
-      // Double RAF for better reliability with dynamic content
-      requestAnimationFrame(() => {
-        const isNearBottom =
-          chatMessages.scrollTop + chatMessages.clientHeight >=
-          chatMessages.scrollHeight - 50;
-
-        // Always scroll for new messages, or if user was already near bottom
-        if (forceScroll || isNearBottom) {
-          chatMessages.scrollTop = chatMessages.scrollHeight;
-          console.log(`📜 Scrolled to bottom: ${chatMessages.scrollHeight}`);
-        }
-      });
-    });
-  }
-
   // Main chat interface initialization
   import("./enhanced-ai-helper.js")
     .then(({ getAIResponse }) => {
@@ -1945,17 +2110,14 @@ Answer:`,
         };
       }
 
-      // Load meeting data and chat history
+      // Load meeting data and chat history (backup check)
       chrome.storage.local.get(
         ["selectedMeetingForChat", "uid"],
         async (result) => {
           if (result.selectedMeetingForChat && result.uid) {
+            // Already set by FAST PATH, but update just in case
             selectedMeeting = result.selectedMeetingForChat;
             userUid = result.uid;
-
-            if (selectedMeeting.meetingId) {
-              await loadChatHistory(userUid, selectedMeeting.meetingId);
-            }
 
             // Pre-load Drive files for better performance
             await preloadDriveFiles();
@@ -1982,6 +2144,9 @@ Answer:`,
         if (!folderId) return;
 
         try {
+          // Ensure dependencies are loaded (for indexUrlsFromFiles)
+          await loadDependencies();
+
           console.log("🔄 Loading Drive files...");
           await loadUploadedFilesList();
 
@@ -1993,20 +2158,19 @@ Answer:`,
               f.mimeType === "text/plain" ||
               f.mimeType === "application/vnd.google-apps.document" ||
               f.mimeType ===
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
               f.mimeType === "application/pdf" ||
               f.mimeType === "text/csv" ||
               f.mimeType === "application/vnd.google-apps.spreadsheet" ||
               f.mimeType ===
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              "application/vnd.openxmlformats-officedocument.presentationml.presentation"
           );
 
           console.log(
             `📂 Found ${supportedFiles.length} supported files in Drive`
           );
           console.log(
-            `📦 Cache contains ${
-              Object.keys(uploadedFiles).length
+            `📦 Cache contains ${Object.keys(uploadedFiles).length
             } file revisions (id → revSig).`
           );
 
@@ -2059,16 +2223,14 @@ Answer:`,
 
           if (Object.keys(filesToProcess).length > 0) {
             console.log(
-              `📤 Uploading ${
-                Object.keys(filesToProcess).length
+              `📤 Uploading ${Object.keys(filesToProcess).length
               } new files to vector database...`
             );
             await processAndUploadDocuments(filesToProcess);
             await saveUploadedFilesList();
           } else {
             console.log(
-              `✅ All files already processed. RAG system ready with ${
-                Object.keys(uploadedFiles).length
+              `✅ All files already processed. RAG system ready with ${Object.keys(uploadedFiles).length
               } documents`
             );
           }
@@ -2150,9 +2312,8 @@ Answer:`,
               await tw.finish(answer, {
                 postProcess: () => {
                   aiBubble.innerHTML += `<div style="margin-top:10px">
-      <a href="${url}" target="_blank" rel="noopener noreferrer">${
-                    title || url
-                  }</a>
+      <a href="${url}" target="_blank" rel="noopener noreferrer">${title || url
+                    }</a>
     </div>`;
                 },
               });
@@ -2160,7 +2321,7 @@ Answer:`,
               const nsHint = selectedMeeting?.meetingId
                 ? `meeting:${selectedMeeting.meetingId}`
                 : undefined;
-              scrapeAndUpsert(input, nsHint).catch(() => {});
+              scrapeAndUpsert(input, nsHint).catch(() => { });
             } catch (err) {
               console.error(err);
               aiBubble.innerHTML =
@@ -2201,9 +2362,8 @@ Answer:`,
                 let brief = `Here are relevant results:\n\n`;
                 const top = results.slice(0, 5);
                 top.forEach((r, i) => {
-                  brief += `${i + 1}. ${r.title}\n${r.snippet || ""}\n${
-                    r.link
-                  }\n\n`;
+                  brief += `${i + 1}. ${r.title}\n${r.snippet || ""}\n${r.link
+                    }\n\n`;
                 });
                 aiBubble.innerHTML = linkify(brief.trim());
               }
@@ -2423,11 +2583,9 @@ Answer:`,
                 ? ` • Modified: ${modifiedDate}`
                 : "";
 
-              response += `${index + 1}. <a href="${
-                file.webViewLink
-              }" target="_blank" rel="noopener noreferrer">${
-                file.name
-              }</a> <small>(${sizeDisplay}${dateStr})</small><br>`;
+              response += `${index + 1}. <a href="${file.webViewLink
+                }" target="_blank" rel="noopener noreferrer">${file.name
+                }</a> <small>(${sizeDisplay}${dateStr})</small><br>`;
             });
             response += "<br>";
           }
@@ -2735,7 +2893,11 @@ Answer:`,
       }
 
       window.addEventListener("beforeunload", () => {
-        chrome.storage.local.remove("chatWindowId");
+        try {
+          chrome.storage.local.remove("chatWindowId");
+        } catch (e) {
+          // Extension context invalidated - ignore
+        }
       });
 
       function ensureVoicesLoaded() {

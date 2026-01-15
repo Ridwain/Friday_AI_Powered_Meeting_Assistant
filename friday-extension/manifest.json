@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Friday ",
-  "version": "1.0",
-  "description": "Friday - An Ai Powered Meeting Assistant",
+  "name": "Friday",
+  "version": "2.0.0",
+  "description": "Friday - AI Powered Meeting Assistant with Real-time Transcription",
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -21,7 +21,10 @@
     "activeTab",
     "scripting",
     "tabs",
-    "tabCapture"
+    "tabCapture",
+    "offscreen",
+    "sidePanel",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://friday-e65f2.web.app/*",
@@ -32,10 +35,16 @@
     "https://*.zoom.com/*",
     "https://api.openai.com/",
     "https://api.openai.com/*",
-    "http://localhost:3000/*"
+    "https://api.deepgram.com/*",
+    "wss://api.deepgram.com/*",
+    "http://localhost:3000/*",
+    "http://localhost:8080/*"
   ],
+  "side_panel": {
+    "default_path": "chat.html"
+  },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self';"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com wss://api.deepgram.com https://api.deepgram.com http://localhost:3000 http://localhost:8080;"
   },
   "oauth2": {
     "client_id": "837567341884-crat3qdlnqf60gbe5cgjlludjeti81r4.apps.googleusercontent.com",
@@ -47,17 +56,27 @@
     ]
   },
   "icons": {
-    "16": "friday.png"
+    "16": "friday.png",
+    "48": "friday.png",
+    "128": "friday.png"
   },
+  "content_scripts": [],
   "web_accessible_resources": [
     {
       "resources": [
         "transcription-content.js",
+        "transcription-content-v2.js",
+        "transcription-content-v3.js",
+        "deepgram-transcription.js",
+        "toast-notifications.js",
+        "chat.html",
         "libs/mammoth.browser.min.js",
         "libs/pdf.js",
         "libs/pdf.worker.js"
       ],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

@@ -43,8 +43,7 @@ async function generateRealtimeEmbedding(text) {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
-        `Server embedding error: ${response.status} - ${
-          errorData.error || "Unknown error"
+        `Server embedding error: ${response.status} - ${errorData.error || "Unknown error"
         }`
       );
     }
@@ -125,8 +124,11 @@ async function upsertRealtimeTranscript(meetingId, transcript) {
 
 let selectedMeeting = null;
 let isTranscribing = false;
+let cachedMeetings = []; // Store fetched meetings here
+let currentUid = null;
+let isInDetailView = false; // Track if user is viewing meeting details
 
-document.getElementById("bottomButtons").style.display = "none";
+// Note: Bottom buttons visibility is now controlled via CSS (.visible class)
 
 // Notify background script that extension page is available
 chrome.runtime.sendMessage({ type: "EXTENSION_PAGE_CONNECTED" });
@@ -447,6 +449,7 @@ chrome.storage.local.get(
       return;
     }
 
+    currentUid = result.uid;
     welcome.innerText = `Welcome, ${result.email}`;
     selectedMeeting = result.selectedMeetingForChat || null;
 
@@ -469,56 +472,234 @@ chrome.storage.local.get(
 );
 
 function loadMeetingList(uid) {
+  const cacheKey = `meeting_cache_${uid}`;
+  let networkFinished = false;
+
+  // 1. Try to load from local cache first for instant UI
+  chrome.storage.local.get([cacheKey], (result) => {
+    if (networkFinished) return;
+    if (result[cacheKey] && Array.isArray(result[cacheKey])) {
+      console.log("Loaded meetings from local cache");
+      cachedMeetings = result[cacheKey];
+      renderMeetingList();
+    }
+  });
+
+  // 2. Fetch fresh data from Firebase
   const meetingsRef = collection(db, "users", uid, "meetings");
   getDocs(meetingsRef).then((snapshot) => {
-    meetingsDiv.innerHTML = "";
+    networkFinished = true;
+    const freshMeetings = [];
     snapshot.forEach((doc) => {
       const data = doc.data();
       data.meetingId = doc.id;
-      const div = document.createElement("div");
-      div.className = "meeting-card";
-      div.innerHTML = `
-        <strong>${data.meetingDate} @ ${data.meetingTime}</strong><br>
-        <em>Click to view details</em>
-      `;
-      div.onclick = () => showMeetingDetails(data);
-      meetingsDiv.appendChild(div);
+      freshMeetings.push(data);
     });
+
+    // Update memory cache and local storage
+    cachedMeetings = freshMeetings;
+    chrome.storage.local.set({ [cacheKey]: freshMeetings });
+    renderMeetingList();
+  }).catch((error) => {
+    console.error("Error loading meetings:", error);
   });
 }
 
+function renderMeetingList() {
+  // Don't reset if user has navigated to detail view
+  if (isInDetailView) {
+    console.log("Skipping renderMeetingList - user is in detail view");
+    return;
+  }
+
+  selectedMeeting = null;
+  meetingsDiv.innerHTML = "";
+  document.getElementById("bottomButtons").classList.remove("visible");
+
+  // Show welcome section when viewing list
+  const welcomeSection = document.querySelector('.welcome-section');
+  if (welcomeSection) {
+    welcomeSection.style.display = 'block';
+  }
+  welcome.style.display = "block"; // Ensure welcome message is visible
+
+  // Show logout button when viewing meeting list
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.style.display = '';
+  }
+
+  // Update meeting count badge
+  const countBadge = document.getElementById("meetingCount");
+  if (countBadge) {
+    countBadge.textContent = cachedMeetings.length;
+  }
+
+  // Show empty state if no meetings
+  if (cachedMeetings.length === 0) {
+    meetingsDiv.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon"></div>
+        <h3 class="empty-state-title">No meetings yet</h3>
+        <p class="empty-state-description">Your scheduled meetings will appear here.</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Render meeting cards with staggered animation
+  cachedMeetings.forEach((data, index) => {
+    const div = document.createElement("div");
+    div.className = "meeting-card";
+    div.style.animationDelay = `${index * 50}ms`;
+
+    // Determine meeting status
+    const status = getMeetingStatus(data);
+    const statusClass = status === 'Live' ? 'live' : status === 'Upcoming' ? 'upcoming' : 'past';
+
+    // Truncate long links for display
+    const displayLink = data.meetingLink ? truncateLink(data.meetingLink, 35) : 'No link';
+
+    div.innerHTML = `
+      <div class="meeting-card-header">
+        <div class="meeting-datetime">
+          <span class="meeting-date">${data.meetingDate}</span>
+          <span class="meeting-time">${data.meetingTime}</span>
+        </div>
+        <span class="meeting-status ${statusClass}">${status}</span>
+      </div>
+      <div class="meeting-link">
+        <span>${displayLink}</span>
+      </div>
+      <div class="meeting-cta">View details</div>
+    `;
+    div.onclick = () => showMeetingDetails(data);
+    meetingsDiv.appendChild(div);
+  });
+}
+
+// Helper: Get meeting status based on date/time
+function getMeetingStatus(meeting) {
+  try {
+    const now = new Date();
+    const meetingDate = new Date(`${meeting.meetingDate} ${meeting.meetingTime}`);
+    const diffMs = meetingDate - now;
+    const diffMins = diffMs / (1000 * 60);
+
+    if (diffMins >= -60 && diffMins <= 30) {
+      return 'Live';
+    } else if (diffMins > 30) {
+      return 'Upcoming';
+    } else {
+      return 'Past';
+    }
+  } catch {
+    return 'Upcoming';
+  }
+}
+
+// Helper: Truncate long links
+function truncateLink(url, maxLength) {
+  if (!url) return 'No link';
+  if (url.length <= maxLength) return url;
+  return url.substring(0, maxLength) + '...';
+}
+
 function showMeetingDetails(data) {
+  isInDetailView = true; // Mark that we're in detail view
   selectedMeeting = data;
 
+  // Hide welcome section when viewing details
+  const welcomeSection = document.querySelector('.welcome-section');
+  if (welcomeSection) {
+    welcomeSection.style.display = 'none';
+  }
+
+  // Hide logout button when viewing meeting details
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.style.display = 'none';
+  }
+
+  // Get meeting status
+  const status = getMeetingStatus(data);
+  const statusClass = status === 'Live' ? 'live' : status === 'Upcoming' ? 'upcoming' : 'past';
+
   meetingsDiv.innerHTML = `
-    <h3>Meeting Details</h3>
-    <p><strong>Date:</strong> ${data.meetingDate}</p>
-    <p><strong>Time:</strong> ${data.meetingTime}</p>
-    <p><strong>Link:</strong> <a href="${data.meetingLink}" target="_blank">${data.meetingLink}</a></p>
-    <p><strong>Drive:</strong> <a href="${data.driveFolderLink}" target="_blank">${data.driveFolderLink}</a></p>
+    <div class="meeting-details">
+      <div class="meeting-details-header">
+        <h2>Meeting Details</h2>
+        <p>Review and manage this meeting</p>
+      </div>
+      
+      <div class="detail-card">
+        <h4 class="detail-card-title">Schedule</h4>
+        <div class="detail-row">
+          <span class="detail-label">Date</span>
+          <span class="detail-value">${data.meetingDate}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Time</span>
+          <span class="detail-value">${data.meetingTime}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Status</span>
+          <span class="detail-value"><span class="meeting-status ${statusClass}">${status}</span></span>
+        </div>
+      </div>
+      
+      <div class="detail-card">
+        <h4 class="detail-card-title">Resources</h4>
+        <div class="detail-row">
+          <span class="detail-label">Meeting</span>
+          <span class="detail-value"><a href="${data.meetingLink}" target="_blank">Open Meeting Link</a></span>
+        </div>
+        ${data.driveFolderLink ? `
+        <div class="detail-row">
+          <span class="detail-label">Drive</span>
+          <span class="detail-value"><a href="${data.driveFolderLink}" target="_blank">Open Drive Folder</a></span>
+        </div>
+        ` : ''}
+      </div>
+    </div>
   `;
 
   const bottomButtons = document.getElementById("bottomButtons");
-  bottomButtons.style.display = "flex";
+  bottomButtons.classList.add("visible");
 
   document.getElementById("backBtn").onclick = () => {
+    // Close Side Panel at window level
+    chrome.runtime.sendMessage({ type: "CLOSE_SIDE_PANEL" });
+
+    // Clear the detail view flag so renderMeetingList can work
+    isInDetailView = false;
+
     chrome.storage.local.get("chatWindowId", ({ chatWindowId }) => {
+      // Clear meeting AND activation flag
+      chrome.storage.local.set({
+        selectedMeetingForChat: null,
+        chatSessionActive: false
+      });
+
+      const goBackToList = () => {
+        if (cachedMeetings.length > 0) {
+          renderMeetingList(); // Restore cached list instantly
+        } else if (currentUid) {
+          loadMeetingList(currentUid); // Fetch if cache missing (e.g. after reopen)
+        } else {
+          // Fallback reload if we lost state completely
+          window.location.reload();
+        }
+      };
+
       if (chatWindowId) {
         chrome.windows.remove(chatWindowId, () => {
-          chrome.storage.local.remove(
-            ["selectedMeetingForChat", "chatWindowId"],
-            () => {
-              window.location.reload();
-            }
-          );
+          chrome.storage.local.remove(["chatWindowId"], () => {
+            goBackToList();
+          });
         });
       } else {
-        chrome.storage.local.remove(
-          ["selectedMeetingForChat", "chatWindowId"],
-          () => {
-            window.location.reload();
-          }
-        );
+        goBackToList();
       }
     });
   };
@@ -528,6 +709,10 @@ function showMeetingDetails(data) {
       alert("Please select a meeting first.");
       return;
     }
+    // Set flag explicitly when button is clicked
+    // CRITICAL: We must call openOrFocusChatWindow() synchronously/immediately to preserve 
+    // the user gesture. We run the storage update in parallel.
+    chrome.storage.local.set({ chatSessionActive: true });
     openOrFocusChatWindow();
   };
 
@@ -543,22 +728,68 @@ function showMeetingDetails(data) {
     }
   };
 
+  // Always set the meeting in storage when viewing details
+  // This ensures chat.js can always find the selected meeting
   chrome.storage.local.set({ selectedMeetingForChat: data });
 }
 
 function updateTranscriptionButton() {
   if (isTranscribing) {
-    transcriptionBtn.textContent = "🎙️ Stop Transcription";
+    transcriptionBtn.innerHTML = "Stop";
     transcriptionBtn.title = "Stop Transcription (Running in Background)";
-    transcriptionBtn.style.backgroundColor = "#d9534f"; // Red color when active
+    transcriptionBtn.classList.add("transcribing");
+    transcriptionBtn.classList.remove("action-btn-secondary");
   } else {
-    transcriptionBtn.textContent = "🎙️ Start Transcription";
+    transcriptionBtn.innerHTML = "Transcribe";
     transcriptionBtn.title = "Start Transcription";
-    transcriptionBtn.style.backgroundColor = "#222"; // Default color
+    transcriptionBtn.classList.remove("transcribing");
+    transcriptionBtn.classList.add("action-btn-secondary");
   }
 }
 
 function openOrFocusChatWindow() {
+  // Try to use the active tab in the current window
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const activeTab = tabs[0];
+
+    // Check if we can inject into this tab (must be http/https)
+    if (activeTab && activeTab.url && (activeTab.url.startsWith("http://") || activeTab.url.startsWith("https://"))) {
+      // Open Side Panel directly
+      if (chrome.sidePanel && chrome.sidePanel.open) {
+        // Enable panel at window level (persists across tabs)
+        const enablePanel = async () => {
+          try {
+            if (chrome.sidePanel.setOptions) {
+              await chrome.sidePanel.setOptions({
+                enabled: true,
+                path: 'chat.html'
+              });
+              // No need to store tabId - panel is window-level now
+            }
+          } catch (e) {
+            console.warn("SidePanel setOptions failed (non-fatal):", e);
+          }
+        };
+
+        enablePanel().then(() => {
+          return chrome.sidePanel.open({ windowId: activeTab.windowId || chrome.windows.WINDOW_ID_CURRENT });
+        }).catch(err => {
+          console.error("Failed to open side panel:", err);
+          alert("Unable to open Side Panel on this page. Please try navigating to a different website.");
+        });
+      } else {
+        alert("Side Panel API not available.");
+      }
+
+    } else {
+      // Current page is restricted (e.g. new tab, chrome://settings)
+      console.log("Restricted page or no active tab");
+      alert("Please navigate to a normal web page (http/https) to use the AI chat. Browser settings pages are restricted.");
+    }
+  });
+}
+
+function openPopupChatWindow() {
   chrome.storage.local.get("chatWindowId", ({ chatWindowId }) => {
     if (chatWindowId) {
       chrome.windows.get(chatWindowId, (win) => {

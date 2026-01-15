@@ -23,16 +23,31 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+// DOM Elements - Main
 const userNameSpan = document.getElementById("user-name");
 const userPicImg = document.getElementById("user-pic");
 const logoutBtn = document.getElementById("logout-btn");
 const meetingForm = document.getElementById("meeting-form");
 const meetingsList = document.getElementById("meetings-list");
 
+// Main Form Inputs
 const dateInput = document.getElementById("meeting-date");
 const timeInput = document.getElementById("meeting-time");
 const meetingLinkInput = document.getElementById("meeting-link");
 const driveFolderInput = document.getElementById("drive-folder-link");
+const pickDriveBtn = document.getElementById("pick-drive-folder-btn"); // NEW
+
+// Modal Elements
+const editModal = document.getElementById("edit-modal");
+const editMeetingForm = document.getElementById("edit-meeting-form");
+const closeEditBtn = document.getElementById("close-edit-btn");
+
+// Modal Inputs
+const editDateInput = document.getElementById("edit-date");
+const editTimeInput = document.getElementById("edit-time");
+const editLinkInput = document.getElementById("edit-link");
+const editDriveInput = document.getElementById("edit-drive");
+const editPickDriveBtn = document.getElementById("edit-pick-drive-btn"); // NEW
 
 let currentUser = null;
 let editingMeetingId = null;
@@ -46,7 +61,7 @@ function extractFolderId(link) {
   return m ? m[1] : null;
 }
 
-// Redirect to login if not logged in, replace history so back button can't go back here
+// Auth State Listener
 onAuthStateChanged(auth, user => {
   if (!user) {
     window.location.replace("index.html");
@@ -69,6 +84,7 @@ logoutBtn.addEventListener("click", () => {
     .catch(err => alert("Logout failed"));
 });
 
+// --- Create Meeting Logic ---
 meetingForm.addEventListener("submit", async e => {
   e.preventDefault();
   const date = dateInput.value;
@@ -85,28 +101,69 @@ meetingForm.addEventListener("submit", async e => {
     meetingTime: time,
     meetingLink: link,
     driveFolderLink: drive,
+    createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
 
   const ref = collection(db, "users", currentUser.uid, "meetings");
   try {
-    if (editingMeetingId) {
-      await updateDoc(doc(ref, editingMeetingId), data);
-      editingMeetingId = null;
-      alert("Meeting updated");
-    } else {
-      data.createdAt = serverTimestamp();
-      await addDoc(ref, data);
-      alert("Meeting created");
-    }
+    await addDoc(ref, data);
+    alert("Meeting created");
     meetingForm.reset();
-    resetFormButton();
   } catch (err) {
     console.error(err);
     alert("Failed to save meeting.");
   }
 });
 
+// --- Edit Meeting Modal Logic ---
+
+// Close Modal Handler
+const closeModal = () => {
+  editModal.classList.remove("active");
+  editMeetingForm.reset();
+  editingMeetingId = null;
+};
+
+closeEditBtn.addEventListener("click", closeModal);
+editModal.addEventListener("click", (e) => {
+  if (e.target === editModal) closeModal();
+});
+
+// Submit Edit
+editMeetingForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!editingMeetingId) return;
+
+  const date = editDateInput.value;
+  const time = editTimeInput.value;
+  const link = editLinkInput.value.trim();
+  const drive = editDriveInput.value.trim();
+
+  if (!date || !time || !isValidURL(link) || !isValidURL(drive)) {
+    return alert("Please fill all fields with valid URLs.");
+  }
+
+  const data = {
+    meetingDate: date,
+    meetingTime: time,
+    meetingLink: link,
+    driveFolderLink: drive,
+    updatedAt: serverTimestamp(),
+  };
+
+  try {
+    const ref = doc(db, "users", currentUser.uid, "meetings", editingMeetingId);
+    await updateDoc(ref, data);
+    alert("Meeting updated successfully");
+    closeModal();
+  } catch (err) {
+    console.error("Update error:", err);
+    alert("Failed to update meeting.");
+  }
+});
+
+// --- Loading & Rendering ---
 function loadMeetings() {
   const ref = collection(db, "users", currentUser.uid, "meetings");
   const q = query(ref, orderBy("meetingDate", "asc"), orderBy("meetingTime", "asc"));
@@ -161,13 +218,16 @@ function renderMeeting(id, data) {
 
   const edit = document.createElement("button");
   edit.textContent = "Edit";
-  edit.addEventListener("click", () => onEditMeeting(id));
+  edit.className = "btn btn-outline btn-sm";
+  edit.style.marginRight = "10px";
+  edit.addEventListener("click", () => onEditMeeting(id)); // Triggers Modal
   actions.appendChild(edit);
 
   const del = document.createElement("button");
   del.textContent = "Delete";
-  del.style.marginLeft = "10px";
-  del.style.color = "red";
+  del.className = "btn btn-outline btn-sm";
+  del.style.borderColor = "#ef4444";
+  del.style.color = "#ef4444";
   del.addEventListener("click", () => onDeleteMeeting(id));
   actions.appendChild(del);
 
@@ -175,16 +235,30 @@ function renderMeeting(id, data) {
   meetingsList.appendChild(li);
 }
 
+// Triggered by Edit button
 async function onEditMeeting(id) {
-  const ds = await getDoc(doc(db, "users", currentUser.uid, "meetings", id));
-  if (!ds.exists()) return alert("Meeting not found.");
-  const d = ds.data();
-  dateInput.value = d.meetingDate;
-  timeInput.value = d.meetingTime;
-  meetingLinkInput.value = d.meetingLink;
-  driveFolderInput.value = d.driveFolderLink;
-  editingMeetingId = id;
-  setFormButtonToUpdate();
+  try {
+    const docRef = doc(db, "users", currentUser.uid, "meetings", id);
+    const ds = await getDoc(docRef);
+    if (!ds.exists()) return alert("Meeting not found.");
+
+    const d = ds.data();
+
+    // Populate Modal Inputs
+    editDateInput.value = d.meetingDate;
+    editTimeInput.value = d.meetingTime;
+    editLinkInput.value = d.meetingLink;
+    editDriveInput.value = d.driveFolderLink;
+
+    editingMeetingId = id;
+
+    // Show Modal
+    editModal.classList.add("active");
+
+  } catch (err) {
+    console.error(err);
+    alert("Error loading meeting details");
+  }
 }
 
 async function onDeleteMeeting(id) {
@@ -193,26 +267,24 @@ async function onDeleteMeeting(id) {
   alert("Meeting deleted.");
 }
 
-function setFormButtonToUpdate() {
-  meetingForm.querySelector('button[type="submit"]').textContent = "Update Meeting";
-}
-function resetFormButton() {
-  meetingForm.querySelector('button[type="submit"]').textContent = "Create Meeting Assistance";
-}
+// --- Google Drive API & Picker Logic ---
 
 let gapiInitialized = false;
+let pickerInitialized = false;
 let tokenClient;
 const folderNavigationStack = {};
 
 function initGapiClient() {
   return new Promise((resolve, reject) => {
-    gapi.load('client', async () => {
+    // Load both 'client' for API calls and 'picker' for the UI
+    gapi.load('client:picker', async () => {
       try {
         await gapi.client.init({
           apiKey: "AIzaSyCQkiNi5bsfoOUxj9HsxDupXR7SmUHGKPI",
           discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]
         });
         gapiInitialized = true;
+        pickerInitialized = true;
         resolve();
       } catch (error) {
         console.error("API init error:", error);
@@ -225,7 +297,7 @@ function initGapiClient() {
 function initializeTokenClient() {
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: "837567341884-0qp9pv773cmos8favl2po8ibhkkv081s.apps.googleusercontent.com",
-    scope: "https://www.googleapis.com/auth/drive.readonly",
+    scope: "https://www.googleapis.com/auth/drive.readonly", // Sufficient for selecting folders
     callback: (tokenResponse) => {
       if (tokenResponse.error) {
         console.error("Token error:", tokenResponse);
@@ -246,9 +318,67 @@ function requestAccessToken() {
         resolve(token);
       }
     };
-    tokenClient.requestAccessToken({ prompt: "consent" });
+    tokenClient.requestAccessToken({ prompt: "consent" }); // Trigger auth popup
   });
 }
+
+// Generic Picker Launcher
+async function openDrivePicker(targetInput) {
+  try {
+    if (!gapiInitialized) await initGapiClient();
+    if (!tokenClient) initializeTokenClient();
+
+    // Ensure we have a valid token
+    const token = gapi.client.getToken();
+    if (!token) {
+      await requestAccessToken();
+    }
+
+    if (!pickerInitialized) {
+      alert("Google Picker API not loaded yet. Please try again.");
+      return;
+    }
+
+    const oauthToken = gapi.client.getToken().access_token;
+
+    // Build the Picker
+    // ViewId.FOLDERS to select folders
+    // Use DocsView for folder selection (View does not support setSelectFolderEnabled)
+    const view = new google.picker.DocsView(google.picker.ViewId.DOCS);
+    view.setMimeTypes("application/vnd.google-apps.folder");
+    view.setSelectFolderEnabled(true);
+    view.setIncludeFolders(true); // Ensure folders are shown
+
+    const picker = new google.picker.PickerBuilder()
+      .enableFeature(google.picker.Feature.NAV_HIDDEN)
+      .setAppId("837567341884")
+      .setOAuthToken(oauthToken)
+      .addView(view)
+      .setDeveloperKey("AIzaSyCQkiNi5bsfoOUxj9HsxDupXR7SmUHGKPI")
+      .setCallback((data) => {
+        if (data[google.picker.Response.ACTION] === google.picker.Action.PICKED) {
+          const doc = data[google.picker.Response.DOCUMENTS][0];
+          const folderUrl = doc[google.picker.Document.URL];
+          // Update the input
+          targetInput.value = folderUrl;
+        }
+      })
+      .build();
+
+    picker.setVisible(true);
+
+  } catch (err) {
+    console.error("Error opening picker:", err);
+    alert("Failed to open Drive Picker: " + (err.message || JSON.stringify(err)));
+  }
+}
+
+// Listeners for Picker Buttons
+pickDriveBtn.addEventListener("click", () => openDrivePicker(driveFolderInput));
+editPickDriveBtn.addEventListener("click", () => openDrivePicker(editDriveInput));
+
+
+// --- Existing Drive File Listing Logic (Untouched) ---
 
 async function showFilesFromDrive(folderId, containerId) {
   if (!folderId) return;

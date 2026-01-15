@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transcription System - Before vs After</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: white;
+      font-size: 48px;
+      margin-bottom: 20px;
+      text-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    .subtitle {
+      text-align: center;
+      color: rgba(255,255,255,0.9);
+      font-size: 20px;
+      margin-bottom: 60px;
+    }
+
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      margin-bottom: 60px;
+    }
+
+    .panel {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      transition: transform 0.3s;
+    }
+
+    .panel:hover {
+      transform: translateY(-10px);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 3px solid #eee;
+    }
+
+    .panel-icon {
+      font-size: 48px;
+    }
+
+    .panel-title {
+      font-size: 32px;
+      font-weight: 700;
+    }
+
+    .before .panel-title {
+      color: #f44336;
+    }
+
+    .after .panel-title {
+      color: #4caf50;
+    }
+
+    .timeline {
+      position: relative;
+      padding-left: 40px;
+    }
+
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 24px;
+      padding: 16px;
+      background: #f8f9fa;
+      border-radius: 12px;
+      transition: all 0.3s;
+    }
+
+    .timeline-item:hover {
+      background: #e9ecef;
+      transform: translateX(5px);
+    }
+
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -34px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: white;
+      border: 4px solid #667eea;
+      z-index: 1;
+    }
+
+    .before .timeline-item.stuck {
+      background: #ffebee;
+      border-left: 4px solid #f44336;
+    }
+
+    .before .timeline-item.stuck::before {
+      background: #f44336;
+      border-color: #f44336;
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    .after .timeline-item.success {
+      background: #e8f5e9;
+      border-left: 4px solid #4caf50;
+    }
+
+    .after .timeline-item.success::before {
+      background: #4caf50;
+      border-color: #4caf50;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: translateY(-50%) scale(1); }
+      50% { transform: translateY(-50%) scale(1.3); }
+    }
+
+    .time {
+      font-size: 14px;
+      font-weight: 700;
+      color: #667eea;
+      margin-bottom: 4px;
+    }
+
+    .status {
+      font-size: 16px;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .detail {
+      font-size: 14px;
+      color: #666;
+      font-style: italic;
+    }
+
+    .features {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      margin-bottom: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    .features h2 {
+      font-size: 32px;
+      margin-bottom: 30px;
+      text-align: center;
+      color: #333;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+
+    .feature-card {
+      padding: 24px;
+      background: #f8f9fa;
+      border-radius: 12px;
+      text-align: center;
+      transition: all 0.3s;
+    }
+
+    .feature-card:hover {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      transform: translateY(-5px);
+    }
+
+    .feature-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .feature-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .feature-desc {
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    .cta {
+      background: white;
+      border-radius: 20px;
+      padding: 60px 40px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    .cta h2 {
+      font-size: 36px;
+      margin-bottom: 20px;
+      color: #333;
+    }
+
+    .cta p {
+      font-size: 18px;
+      color: #666;
+      margin-bottom: 30px;
+    }
+
+    .steps {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      margin-bottom: 40px;
+      flex-wrap: wrap;
+    }
+
+    .step {
+      flex: 1;
+      min-width: 200px;
+      max-width: 300px;
+      padding: 30px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 16px;
+      transition: transform 0.3s;
+    }
+
+    .step:hover {
+      transform: scale(1.05);
+    }
+
+    .step-number {
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .step-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .step-desc {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 16px 40px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 50px;
+      font-size: 18px;
+      font-weight: 600;
+      transition: all 0.3s;
+      box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(102, 126, 234, 0.6);
+    }
+
+    @media (max-width: 768px) {
+      .comparison {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 32px;
+      }
+
+      .steps {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎙️ Transcription System Upgrade</h1>
+    <p class="subtitle">Visual comparison of the old vs new system</p>
+
+    <!-- Before vs After Comparison -->
+    <div class="comparison">
+      <!-- BEFORE -->
+      <div class="panel before">
+        <div class="panel-header">
+          <div class="panel-icon">❌</div>
+          <div class="panel-title">OLD SYSTEM</div>
+        </div>
+        
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="time">00:00</div>
+            <div class="status">🎙️ Transcription started</div>
+            <div class="detail">User clicks "Start Transcription"</div>
+          </div>
+          
+          <div class="timeline-item">
+            <div class="time">00:05</div>
+            <div class="status">💬 "Hello, this is a test..."</div>
+            <div class="detail">Recording speech normally</div>
+          </div>
+          
+          <div class="timeline-item">
+            <div class="time">00:15</div>
+            <div class="status">💬 "We are discussing the project..."</div>
+            <div class="detail">Still working...</div>
+          </div>
+          
+          <div class="timeline-item stuck">
+            <div class="time">00:20</div>
+            <div class="status">⚠️ GETS STUCK!</div>
+            <div class="detail">Recognition stops responding</div>
+          </div>
+          
+          <div class="timeline-item stuck">
+            <div class="time">00:25</div>
+            <div class="status">🔇 No more transcription</div>
+            <div class="detail">User keeps speaking but nothing happens</div>
+          </div>
+          
+          <div class="timeline-item stuck">
+            <div class="time">01:00</div>
+            <div class="status">💀 Browser timeout</div>
+            <div class="detail">Recognition completely dies</div>
+          </div>
+          
+          <div class="timeline-item stuck">
+            <div class="time">01:05</div>
+            <div class="status">❌ STOPPED</div>
+            <div class="detail">User has to manually restart</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AFTER -->
+      <div class="panel after">
+        <div class="panel-header">
+          <div class="panel-icon">✅</div>
+          <div class="panel-title">NEW SYSTEM</div>
+        </div>
+        
+        <div class="timeline">
+          <div class="timeline-item success">
+            <div class="time">00:00</div>
+            <div class="status">🎙️ Transcription started</div>
+            <div class="detail">Beautiful gradient indicator appears</div>
+          </div>
+          
+          <div class="timeline-item success">
+            <div class="time">00:05</div>
+            <div class="status">💬 "Hello, this is a test..."</div>
+            <div class="detail">Real-time preview in indicator</div>
+          </div>
+          
+          <div class="timeline-item success">
+            <div class="time">00:15</div>
+            <div class="status">💬 "We are discussing the project..."</div>
+            <div class="detail">Auto-punctuation applied</div>
+          </div>
+          
+          <div class="timeline-item success">
+            <div class="time">00:55</div>
+            <div class="status">🔄 Auto-restart (preventive)</div>
+            <div class="detail">Seamless restart before timeout</div>
+          </div>
+          
+          <div class="timeline-item success">
+            <div class="time">00:56</div>
+            <div class="status">💬 "Continuing transcript..."</div>
+            <div class="detail">No interruption, keeps going!</div>
+          </div>
+          
+          <div class="timeline-item success">
+            <div class="time">01:50</div>
+            <div class="status">🔄 Auto-restart again</div>
+            <div class="detail">Runs continuously</div>
+          </div>
+          
+          <div class="timeline-item success">
+            <div class="time">05:00+</div>
+            <div class="status">🚀 RUNS FOREVER!</div>
+            <div class="detail">Works for hours like Notion AI</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="features">
+      <h2>✨ New Features & Improvements</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <div class="feature-title">Preventive Restart</div>
+          <div class="feature-desc">Restarts at 55s before 60s timeout</div>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">♾️</div>
+          <div class="feature-title">Continuous Operation</div>
+          <div class="feature-desc">Never stops, runs for hours</div>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">🛡️</div>
+          <div class="feature-title">Smart Error Recovery</div>
+          <div class="feature-desc">Up to 10 retry attempts</div>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">💓</div>
+          <div class="feature-title">Keepalive Mechanism</div>
+          <div class="feature-desc">Auto-restarts on silence</div>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">🎨</div>
+          <div class="feature-title">Beautiful UI</div>
+          <div class="feature-desc">Gradient indicator with animations</div>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">📝</div>
+          <div class="feature-title">Auto-Punctuation</div>
+          <div class="feature-desc">Adds periods & capitals</div>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">💾</div>
+          <div class="feature-title">Auto-Save</div>
+          <div class="feature-desc">Saves every 2 seconds</div>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">🔍</div>
+          <div class="feature-title">Structured Logging</div>
+          <div class="feature-desc">Easy debugging with logs</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Call to Action -->
+    <div class="cta">
+      <h2>🚀 Ready to Upgrade?</h2>
+      <p>Follow these 3 simple steps to fix your transcription system</p>
+      
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-title">Reload Extension</div>
+          <div class="step-desc">Go to chrome://extensions/ and click reload</div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-title">Open Google Meet</div>
+          <div class="step-desc">Join any meeting or create a test one</div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-title">Start & Test</div>
+          <div class="step-desc">Click "Start Transcription" and speak!</div>
+        </div>
+      </div>
+      
+      <a href="chrome://extensions/" class="btn">Go to Extensions →</a>
+    </div>
+  </div>
+
+  <script>
+    // Add smooth scroll
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        document.querySelector(this.getAttribute('href')).scrollIntoView({
+          behavior: 'smooth'
+        });
+      });
+    });
+
+    // Animate timeline items on scroll
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -100px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '0';
+          entry.target.style.transform = 'translateX(-20px)';
+          setTimeout(() => {
+            entry.target.style.transition = 'all 0.5s ease-out';
+            entry.target.style.opacity = '1';
+            entry.target.style.transform = 'translateX(0)';
+          }, 100);
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll('.timeline-item').forEach(item => {
+      observer.observe(item);
+    });
+  </script>
+</body>
+</html>
+

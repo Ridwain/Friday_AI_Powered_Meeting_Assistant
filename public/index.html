@@ -1,58 +1,143 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Login / Signup</title>
-  <link rel="stylesheet" href="style.css" />
-  <script src="form_toggle.js" defer></script>
-  <script type="module" src="firebase.js" defer></script>
-  <meta name="google-site-verification" content="5A9hvUXyspiAEPUMoAxH1KDuK8_29065hPn3_UT4Y6k" />
+  <title>Friday - Your AI Meeting Assistant</title>
+  <link rel="stylesheet" href="style.css?v=2.0" />
 
+  <!-- Preload fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script type="module" src="firebase.js" defer></script>
+  <script src="landing.js" defer></script>
 </head>
 
 <body>
-  <div class="container">
-    <h2>Welcome</h2>
-<!-- <div style="margin: 1em 0; padding: 0.5em; border: 1px solid #ccc; background: #f9f9f9; font-size: 0.9em; color: #555; border-radius: 4px;">
-  <strong>Note:</strong> This is a secure student project app using Firebase Authentication. Your login credentials are handled only by Firebase, and we do not collect or store your passwords.
-</div> -->
-    <!-- Toggle buttons -->
-    <div class="form-toggle">
-      <button id="show-login">Login</button>
-      <button id="show-signup">Sign Up</button>
+  <div class="background-mesh"></div>
+
+  <!-- Navbar -->
+  <header>
+    <div class="container">
+      <div class="logo">Friday</div>
+      <nav>
+        <button id="nav-login-btn" class="btn btn-outline">Login</button>
+      </nav>
     </div>
+  </header>
 
-    <!-- Login form -->
-    <form id="login-form" class="form">
-      <input type="email" id="login-email" placeholder="Email" required />
-      <input type="password" id="login-password" placeholder="Password" required />
-      <button type="submit">Login</button>
-    </form>
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <h1>Your AI Copilot<br>for Every Meeting</h1>
+      <p>Transform your Google Meet calls with real-time transcription, instant Q&A, and smart summaries. Never miss a
+        detail again.</p>
 
-    <!-- Reset password form -->
-    <form id="reset-password-form" class="form hidden">
-      <input type="email" id="reset-email" placeholder="Enter your email to reset password" required />
-      <button type="submit">Send Reset Link</button>
-    </form>
+      <div style="display: flex; gap: 16px; justify-content: center;">
+        <button id="hero-signup-btn" class="btn btn-primary">Get Started for Free</button>
+        <a href="#features" class="btn btn-outline">Learn More</a>
+      </div>
+    </div>
+  </section>
 
-    <!-- Reset links -->
-    <p class="reset-link">
-      <a href="#" id="show-reset">Forgot Password?</a>
-      <a href="#" id="back-to-login" class="hidden">Back to Login</a>
-    </p>
+  <!-- Features Section -->
+  <section id="features" class="features">
+    <div class="container">
+      <div class="grid">
+        <!-- Feature 1 -->
+        <div class="card">
+          <div class="icon-box">🎙️</div>
+          <h3>Real-time Transcription</h3>
+          <p>Live captions and transcripts for every word spoken. Support for multi-speaker identification and high
+            accuracy.</p>
+        </div>
+        <!-- Feature 2 -->
+        <div class="card">
+          <div class="icon-box">🤖</div>
+          <h3>Instant Q&A</h3>
+          <p>Ask Friday anything about the current conversation. "What did Alex just propose?" or "Summarize the last 5
+            minutes".</p>
+        </div>
+        <!-- Feature 3 -->
+        <div class="card">
+          <div class="icon-box">📝</div>
+          <h3>Smart Summaries</h3>
+          <p>Receive clear, actionable meeting minutes and tasks immediately after the call ends. Export to Google Docs.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    <!-- Signup form -->
-    <form id="signup-form" class="form hidden">
-      <input type="email" id="signup-email" placeholder="Email" required />
-      <input type="password" id="signup-password" placeholder="Password" required />
-      <button type="submit">Sign Up</button>
-    </form>
+  <!-- Auth Modal (Hidden) -->
+  <div id="auth-modal" class="modal-overlay">
+    <div class="auth-card">
+      <div class="auth-header">
+        <h2 style="font-size: 1.8rem;">Welcome Back</h2>
+        <p>Sign in to continue to your dashboard</p>
+      </div>
 
-    <div class="divider">or</div>
+      <!-- Tabs (Mapped to firebase.js IDs 'show-login' and 'show-signup') -->
+      <div class="tabs">
+        <div id="show-login" class="tab active">Login</div>
+        <div id="show-signup" class="tab">Sign Up</div>
+      </div>
 
-    <!-- Google Login -->
-    <button id="google-login-btn" class="google-btn">Sign in with Google</button>
+      <!-- Login Form -->
+      <form id="login-form">
+        <div class="form-group">
+          <input type="email" id="login-email" placeholder="Email address" required />
+        </div>
+        <div class="form-group">
+          <input type="password" id="login-password" placeholder="Password" required />
+        </div>
+
+        <div style="text-align: right; margin-bottom: 16px;">
+          <a href="#" id="show-reset" style="font-size: 0.875rem; color: var(--primary);">Forgot Password?</a>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%;">Log In</button>
+      </form>
+
+      <!-- Signup Form (Hidden initially) -->
+      <form id="signup-form" class="hidden">
+        <div class="form-group">
+          <input type="email" id="signup-email" placeholder="Email address" required />
+        </div>
+        <div class="form-group">
+          <input type="password" id="signup-password" placeholder="Create password" required />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">Create Account</button>
+      </form>
+
+      <!-- Reset Password Form (Hidden initially) -->
+      <form id="reset-password-form" class="hidden">
+        <p style="margin-bottom: 16px; font-size: 0.9rem;">Enter your email to receive a reset link.</p>
+        <div class="form-group">
+          <input type="email" id="reset-email" placeholder="Email address" required />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">Send Reset Link</button>
+        <div style="text-align: center; margin-top: 16px;">
+          <a href="#" id="back-to-login" style="font-size: 0.875rem; color: var(--text-muted);">Back to Login</a>
+        </div>
+      </form>
+
+      <div class="divider">or continue with</div>
+
+      <button id="google-login-btn" class="btn btn-google">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20">
+        Sign in with Google
+      </button>
+
+      <!-- Close modal button (top right absolute) -->
+      <button id="close-modal-btn"
+        style="position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.5rem;">&times;</button>
+    </div>
   </div>
+
 </body>
+
 </html>

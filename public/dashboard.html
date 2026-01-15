@@ -1,56 +1,133 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dashboard</title>
-  <link rel="stylesheet" href="dashboard.css" />
+  <title>Friday Dashboard</title>
+
+  <!-- Preload fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Use new dashboard styles -->
+  <link rel="stylesheet" href="dashboard.css?v=2.2" />
 </head>
+
 <body>
-  <h1>Welcome, <span id="user-name"></span></h1>
-  <img id="user-pic" width="100" style="border-radius: 50%; display: none;" alt="Profile Picture" />
-  <br />
-  <button id="logout-btn">Logout</button>
+  <div class="background-mesh"></div>
 
-  <hr style="margin: 30px 0" />
+  <!-- Navbar -->
+  <header>
+    <div class="container header-container">
+      <div class="logo">Friday</div>
+      <div class="user-menu">
+        <img id="user-pic" alt="User" class="user-avatar" style="display: none;" />
+        <span id="user-name" class="user-name">Loading...</span>
+        <button id="logout-btn" class="btn btn-outline btn-sm">Logout</button>
+      </div>
+    </div>
+  </header>
 
-  <form id="meeting-form" style="max-width: 500px; margin: auto;">
-    <label>
-        Meeting Date:
-        <input type="date" id="meeting-date" required />
-    </label>
-    <br /><br />
-    <label>
-        Meeting Time:
-        <input type="time" id="meeting-time" required />
-    </label>
+  <main class="container main-content">
 
-    <br /><br />
+    <!-- Action Card -->
+    <div class="grid-layout">
+      <div class="action-section">
+        <div class="glass-card">
+          <h2>New Meeting</h2>
+          <p style="margin-bottom: 24px;">Setup a new meeting for Friday to join.</p>
 
-    <label>
-      Meeting Link (URL):
-      <input type="url" id="meeting-link" placeholder="https://meet.google.com/xyz-abc" required />
-    </label>
-    <br /><br />
+          <form id="meeting-form" class="meeting-form">
+            <div class="form-row">
+              <label>
+                Date
+                <input type="date" id="meeting-date" required />
+              </label>
+              <label>
+                Time
+                <input type="time" id="meeting-time" required />
+              </label>
+            </div>
 
-    <label>
-      Google Drive Folder Link:
-      <input type="url" id="drive-folder-link" placeholder="https://drive.google.com/drive/folders/..." required />
-    </label>
-    <br /><br />
+            <label>
+              Meeting Link (URL)
+              <input type="url" id="meeting-link" placeholder="https://meet.google.com/..." required />
+            </label>
 
-    <button type="submit">Create Meeting Assistance</button>
-  </form>
+            <label>
+              Drive Folder (for recordings/context)
+              <div style="display: flex; gap: 8px;">
+                <input type="url" id="drive-folder-link" placeholder="https://drive.google.com/drive/folders/..."
+                  required style="flex: 1;" />
+                <button type="button" id="pick-drive-folder-btn" class="btn btn-outline"
+                  style="white-space: nowrap;">Select Folder</button>
+              </div>
+            </label>
 
-  <h2 style="max-width: 500px; margin: 30px auto 10px auto;">Your Meetings</h2>
-  <ul id="meetings-list" style="max-width: 500px; margin: auto; padding-left: 0;"></ul>
+            <button type="submit" id="submit-btn" class="btn btn-primary" style="width: 100%; margin-top: 16px;">Create
+              Meeting Assistance</button>
+          </form>
+        </div>
+      </div>
 
-  <script type="module" src="firebase_logged.js"></script>
+      <!-- List Section -->
+      <div class="list-section">
+        <div class="glass-card">
+          <h2>Your Meetings</h2>
+          <ul id="meetings-list" class="meetings-list">
+            <!-- Populated by JS -->
+            <li class="loading-text">Loading meetings...</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script type="module" src="firebase_logged.js?v=2.8"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js"></script>
 
+  <!-- Edit Modal -->
+  <div id="edit-modal" class="modal-overlay">
+    <div class="glass-card auth-card" style="max-width: 500px;">
+      <h2 style="margin-bottom: 20px;">Edit Meeting</h2>
+      <form id="edit-meeting-form" class="meeting-form">
+        <div class="form-row">
+          <label>
+            Date
+            <input type="date" id="edit-date" required />
+          </label>
+          <label>
+            Time
+            <input type="time" id="edit-time" required />
+          </label>
+        </div>
 
+        <label>
+          Meeting Link (URL)
+          <input type="url" id="edit-link" required />
+        </label>
 
+        <label>
+          Drive Folder
+          <div style="display: flex; gap: 8px;">
+            <input type="url" id="edit-drive" required style="flex: 1;" />
+            <button type="button" id="edit-pick-drive-btn" class="btn btn-outline" style="white-space: nowrap;">Select
+              Folder</button>
+          </div>
+        </label>
+
+        <div style="display: flex; gap: 10px; margin-top: 10px; justify-content: flex-end;">
+          <button type="button" id="close-edit-btn" class="btn btn-outline">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div style="position: fixed; bottom: 10px; right: 10px; color: #444; font-size: 0.8rem;">v2.8</div>
 </body>
-</html>
 
+</html>

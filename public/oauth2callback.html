@@ -1,34 +1,111 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <title>OAuth2 Redirect</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .container {
+      text-align: center;
+      padding: 20px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #e0e0e0;
+      border-top-color: #4285f4;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .message {
+      margin-top: 16px;
+      color: #666;
+    }
+  </style>
 </head>
+
 <body>
+  <div class="container">
+    <div class="spinner"></div>
+    <p>Signing you in...</p>
+    <p class="message" id="message"></p>
+  </div>
   <script>
     // This page receives Google's OAuth redirect with access token in URL hash.
     // It passes the token back to the extension and closes itself.
+    // Handles COOP (Cross-Origin-Opener-Policy) restrictions gracefully.
 
-    (function() {
+    (function () {
+      const messageEl = document.getElementById('message');
+
       // Parse access_token from URL fragment
       const hash = window.location.hash.substring(1);
       const params = new URLSearchParams(hash);
       const accessToken = params.get('access_token');
       const error = params.get('error');
 
-      if (accessToken) {
-        // Send token to extension via postMessage
-        window.opener.postMessage({ type: 'oauth2callback', accessToken }, '*');
-        window.close();
-      } else if (error) {
-        window.opener.postMessage({ type: 'oauth2callback', error }, '*');
+      function tryClose() {
+        // Attempt to close the window. Due to COOP, this may or may not work.
+        try {
+          window.close();
+        } catch (e) {
+          // Ignore - window may already be closing or COOP blocks it
+        }
 
-        window.close();
+        // If window didn't close after 1 second, show message to user
+        setTimeout(() => {
+          if (!window.closed) {
+            messageEl.textContent = 'You can safely close this window.';
+          }
+        }, 1000);
+      }
+
+      function sendMessage(data) {
+        // Check if window.opener is available (COOP may nullify it)
+        if (window.opener && typeof window.opener.postMessage === 'function') {
+          try {
+            window.opener.postMessage(data, '*');
+          } catch (e) {
+            console.log('postMessage failed due to COOP:', e);
+          }
+        } else {
+          console.log('window.opener not available - COOP may have blocked it');
+        }
+
+        // Wait a short time to ensure the message is processed before closing
+        setTimeout(tryClose, 300);
+      }
+
+      if (accessToken) {
+        sendMessage({ type: 'oauth2callback', accessToken });
+      } else if (error) {
+        sendMessage({ type: 'oauth2callback', error });
       } else {
-        document.body.textContent = 'No access token found.';
+        document.querySelector('.spinner').style.display = 'none';
+        document.querySelector('p').textContent = 'Authentication failed';
+        messageEl.textContent = 'No access token found. Please close this window and try again.';
       }
     })();
   </script>
 </body>
+
 </html>
-
-

@@ -142,27 +142,8 @@ document.addEventListener("DOMContentLoaded", () => {
       });
   });
 
-  // *** Improved auto-logout logic: only sign out if user returns after 1 minute ***
-  const SIGNOUT_DELAY_MS = 12000; // 12 seconds (adjust as needed)
-
-  window.addEventListener("beforeunload", () => {
-    sessionStorage.setItem("lastUnload", Date.now().toString());
-  });
-
-  window.addEventListener("load", () => {
-    const lastUnload = sessionStorage.getItem("lastUnload");
-    if (lastUnload) {
-      const diff = Date.now() - parseInt(lastUnload, 10);
-      if (diff < SIGNOUT_DELAY_MS) {
-        // Reload or quick revisit detected — do NOT sign out
-        console.log("Page reloaded or quickly revisited; user stays logged in");
-        sessionStorage.removeItem("lastUnload");
-        return;
-      }
-    }
-    // User returned after delay or no previous unload detected — sign out
-    auth.signOut().catch((error) => {
-      console.error("Error signing out on load:", error);
-    });
-  });
+  // Session persistence is now handled naturally by Firebase.
+  // The previous auto-logout logic was removed because it would
+  // sign users out unexpectedly after short periods of inactivity.
+  // If you need explicit logout, consider a "Logout" button instead.
 });

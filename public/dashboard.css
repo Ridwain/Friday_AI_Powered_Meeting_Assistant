@@ -1,108 +1,254 @@
-/* dashboard.css */
+:root {
+  /* Brand Colors */
+  --bg-color: #030712;
+  --text-main: #f9fafb;
+  --text-muted: #9ca3af;
+  --primary: #6366f1;
+  --primary-glow: rgba(99, 102, 241, 0.4);
+  --glass-bg: rgba(17, 24, 39, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --container-width: 1200px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 body {
-  font-family: Arial, sans-serif;
-  background-color: #f7f9fc;
-  margin: 20px;
-  color: #333;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  min-height: 100vh;
 }
 
-h1 {
-  text-align: center;
-  color: #2c3e50;
-  margin-bottom: 30px;
+/* Background Mesh */
+.background-mesh {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(236, 72, 153, 0.15) 0px, transparent 50%);
+  filter: blur(80px);
 }
 
-form {
-  background-color: #fff;
-  padding: 25px 30px;
-  border-radius: 8px;
-  max-width: 500px;
-  margin: 0 auto 40px auto;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+.container {
+  max-width: var(--container-width);
+  margin: 0 auto;
+  padding: 0 24px;
 }
 
-form label {
-  display: block;
+/* Navbar */
+header {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+}
+
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.logo {
+  font-size: 1.5rem;
+  font-weight: 800;
+  background: linear-gradient(to right, #6366f1, #ec4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.user-name {
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+/* Buttons */
+.btn {
+  padding: 8px 16px;
+  border-radius: 9999px;
   font-weight: 600;
-  margin-bottom: 8px;
-  color: #34495e;
-}
-
-form input[type="datetime-local"],
-form input[type="url"] {
-  width: 100%;
-  padding: 10px 12px;
-  margin-bottom: 20px;
-  border: 1.8px solid #ddd;
-  border-radius: 5px;
-  font-size: 1rem;
-  transition: border-color 0.3s ease;
-}
-
-form input[type="datetime-local"]:focus,
-form input[type="url"]:focus {
-  outline: none;
-  border-color: #4caf50;
-  box-shadow: 0 0 6px #4caf50aa;
-}
-
-form button[type="submit"] {
-  background-color: #4caf50;
-  color: white;
-  padding: 12px 25px;
-  border: none;
-  border-radius: 6px;
-  font-size: 1.1rem;
   cursor: pointer;
-  transition: background-color 0.3s ease;
-  width: 100%;
-  font-weight: 700;
+  border: none;
+  font-size: 0.9rem;
+  transition: all 0.2s;
 }
 
-form button[type="submit"]:hover {
-  background-color: #43a047;
+.btn-primary {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+}
+
+.btn-primary:hover {
+  box-shadow: 0 0 20px var(--primary-glow);
+  transform: translateY(-1px);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  color: var(--text-main);
+}
+
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+/* Main Content */
+.main-content {
+  padding: 40px 0;
+}
+
+.grid-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 32px;
+}
+
+@media (max-width: 768px) {
+  .grid-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 32px;
 }
 
 h2 {
-  max-width: 500px;
-  margin: 0 auto 20px auto;
-  color: #2c3e50;
+  font-size: 1.5rem;
+  margin-bottom: 8px;
   font-weight: 700;
-  border-bottom: 2px solid #4caf50;
-  padding-bottom: 5px;
 }
 
-#meetings-list {
-  max-width: 500px;
-  margin: 0 auto;
+p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+/* Form */
+.meeting-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-row label {
+  flex: 1;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+input {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  color: white;
+  outline: none;
+}
+
+input:focus {
+  border-color: var(--primary);
+}
+
+/* List */
+.meetings-list {
   list-style: none;
   padding: 0;
 }
 
-#meetings-list li {
-  background-color: #fff;
-  margin-bottom: 15px;
-  padding: 15px 20px;
-  border-radius: 8px;
-  box-shadow: 0 3px 7px rgba(0, 0, 0, 0.07);
-  line-height: 1.4;
-  font-size: 1rem;
+.meetings-list li {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
 }
 
-#meetings-list li a {
-  color: #4caf50;
+.meetings-list li strong {
+  color: white;
+}
+
+.meetings-list li a {
+  color: var(--primary);
   text-decoration: none;
-  word-break: break-word;
 }
 
-#meetings-list li a:hover {
-  text-decoration: underline;
+.loading-text {
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  background: none !important;
+  border: none !important;
 }
 
-/* Responsive */
-@media (max-width: 600px) {
-  form, h2, #meetings-list {
-    max-width: 95%;
-  }
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.modal-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal-overlay .glass-card {
+  width: 100%;
+  max-width: 500px;
+  transform: scale(0.95);
+  transition: transform 0.3s ease;
+}
+
+.modal-overlay.active .glass-card {
+  transform: scale(1);
 }

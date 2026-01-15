@@ -1,7 +1,9 @@
 // web-scraper.js
 // Utilities for URL Q&A, web scraping+indexing, and SERP proxy
 
-const SERVER_URL = "http://localhost:3000";
+import { CONFIG } from "./config.js";
+
+const SERVER_URL = CONFIG.SERVER_URL;
 
 // ---- simple persisted cache of already-upserted URLs ----
 const UPSERT_CACHE_KEY = "webUrlUpserts";
@@ -59,7 +61,7 @@ async function postJSON(path, body, timeoutMs = 25000) {
     let t = "";
     try {
       t = await r.text();
-    } catch {}
+    } catch { }
     throw new Error(`${path} failed: ${r.status} ${t}`);
   }
   return r.json();
