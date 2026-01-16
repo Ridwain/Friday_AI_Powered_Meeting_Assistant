@@ -1582,42 +1582,15 @@ Answer:`,
     }
   }
 
-  function getAuthToken(forceRefresh = false) {
+  function getAuthToken() {
     return new Promise((resolve, reject) => {
-      // If forcing refresh, first remove the cached token
-      if (forceRefresh) {
-        chrome.identity.getAuthToken({ interactive: false }, (oldToken) => {
-          if (oldToken) {
-            chrome.identity.removeCachedAuthToken({ token: oldToken }, () => {
-              console.log("🔄 Removed cached token, fetching fresh one...");
-              chrome.identity.getAuthToken({ interactive: true }, (newToken) => {
-                if (chrome.runtime.lastError || !newToken) {
-                  reject(chrome.runtime.lastError);
-                } else {
-                  resolve(newToken);
-                }
-              });
-            });
-          } else {
-            // No old token, just get a new one
-            chrome.identity.getAuthToken({ interactive: true }, (token) => {
-              if (chrome.runtime.lastError || !token) {
-                reject(chrome.runtime.lastError);
-              } else {
-                resolve(token);
-              }
-            });
-          }
-        });
-      } else {
-        chrome.identity.getAuthToken({ interactive: true }, (token) => {
-          if (chrome.runtime.lastError || !token) {
-            reject(chrome.runtime.lastError);
-          } else {
-            resolve(token);
-          }
-        });
-      }
+      chrome.identity.getAuthToken({ interactive: true }, (token) => {
+        if (chrome.runtime.lastError || !token) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(token);
+        }
+      });
     });
   }
 
@@ -2201,21 +2174,8 @@ Answer:`,
           console.log("🔄 Loading Drive files...");
           await loadUploadedFilesList();
 
-          let token = await getAuthToken();
-          let files;
-
-          try {
-            files = await getFreshFileList(folderId, token);
-          } catch (error) {
-            // If 401, try refreshing token and retrying once
-            if (error.message && error.message.includes("401")) {
-              console.log("🔄 Token expired, refreshing...");
-              token = await getAuthToken(true); // Force refresh
-              files = await getFreshFileList(folderId, token);
-            } else {
-              throw error;
-            }
-          }
+          const token = await getAuthToken();
+          const files = await getFreshFileList(folderId, token);
 
           const supportedFiles = files.filter(
             (f) =>
@@ -2319,7 +2279,6 @@ Answer:`,
       chatInput.addEventListener("keydown", async (e) => {
         if (e.key !== "Enter" || isProcessing) return;
         isProcessing = true;
-        if (sendBtn) sendBtn.disabled = true;
 
         const input = chatInput.value.trim();
         if (!input) {
@@ -2535,7 +2494,6 @@ Answer:`,
         }
 
         isProcessing = false;
-        if (sendBtn) sendBtn.disabled = false;
         scrollToBottom(true);
       });
 

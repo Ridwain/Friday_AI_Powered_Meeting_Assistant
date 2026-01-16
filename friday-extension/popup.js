@@ -382,63 +382,80 @@ loginForm.addEventListener("submit", async (e) => {
 });
 
 googleBtn.onclick = () => {
-  const clientId =
-    "837567341884-p2ri11n3tv2ha5l7v59rmd62p50iocu1.apps.googleusercontent.com"; // ⚠️
-  const redirectUri = "https://friday-e65f2.web.app/oauth2callback.html"; // ⚠️
+  // Use the new Web Application Client ID for secure flow
+  const clientId = "837567341884-4dnaoequvhd1km5rhmogjiq3n7bav4it.apps.googleusercontent.com";
+  const scopes = [
+    "profile",
+    "email",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/userinfo.email"
+  ];
+
+  // Generate a random state for CSRF protection
+  const state = Math.random().toString(36).substring(7);
+  chrome.storage.local.set({ oauth_state: state });
+
+  // Get Chrome's built-in redirect URL for secure OAuth
+  const redirectUri = chrome.identity.getRedirectURL();
   const authUrl =
     `https://accounts.google.com/o/oauth2/v2/auth?` +
     `client_id=${clientId}&` +
     `response_type=token&` +
     `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-    `scope=email%20profile&` +
+    `scope=${encodeURIComponent(scopes.join(" "))}&` +
+    `state=${state}&` +
     `prompt=select_account`;
 
-  // Open the OAuth URL in a popup window
-  const width = 500;
-  const height = 600;
-  const left = screen.width / 2 - width / 2;
-  const top = screen.height / 2 - height / 2;
+  status.innerText = "Opening secure login...";
 
-  const popup = window.open(
-    authUrl,
-    "oauth2_popup",
-    `width=${width},height=${height},top=${top},left=${left}`
-  );
+  // Use Chrome's secure identity API instead of manual popup
+  chrome.identity.launchWebAuthFlow(
+    { url: authUrl, interactive: true },
+    async (responseUrl) => {
+      // Handle errors or user cancellation
+      if (chrome.runtime.lastError || !responseUrl) {
+        status.innerText = `Login cancelled or failed: ${chrome.runtime.lastError?.message || "Unknown error"}`;
+        return;
+      }
 
-  // Listen for message from the hosted redirect page
-  window.addEventListener(
-    "message",
-    async (event) => {
-      if (event.origin !== new URL(redirectUri).origin) return;
-      if (event.data.type === "oauth2callback") {
-        if (event.data.error) {
-          status.innerText = `OAuth error: ${event.data.error}`;
-          // Note: popup closes itself via oauth2callback.html - no need to call popup.close() here
+      try {
+        const url = new URL(responseUrl);
+        const hash = url.hash.substring(1);
+        const params = new URLSearchParams(hash);
+
+        // Verify state to prevent CSRF
+        const returnedState = params.get("state");
+        const storedState = await new Promise(resolve =>
+          chrome.storage.local.get(['oauth_state'], res => resolve(res.oauth_state))
+        );
+
+        if (returnedState !== storedState) {
+          status.innerText = "Security check failed: State mismatch.";
           return;
         }
-        if (event.data.accessToken) {
-          // Note: popup closes itself via oauth2callback.html - no need to call popup.close() here
-          try {
-            const credential = GoogleAuthProvider.credential(
-              null,
-              event.data.accessToken
-            );
-            const result = await signInWithCredential(auth, credential);
-            const user = result.user;
-            chrome.storage.local.set(
-              { email: user.email, uid: user.uid },
-              () => {
-                window.location.href = "dashboard.html"; // ✅ Redirect to dashboard
-              }
-            );
-          } catch (error) {
-            status.innerText = `Firebase sign-in error: ${error.message}`;
-            console.error(error);
-          }
+
+        const accessToken = params.get("access_token");
+
+        if (accessToken) {
+          status.innerText = "Signing in with Firebase...";
+          const credential = GoogleAuthProvider.credential(null, accessToken);
+          const result = await signInWithCredential(auth, credential);
+          const user = result.user;
+
+          chrome.storage.local.set(
+            { email: user.email, uid: user.uid },
+            () => {
+              window.location.href = "dashboard.html";
+            }
+          );
+        } else {
+          status.innerText = "Failed to get access token.";
         }
+      } catch (error) {
+        status.innerText = `Sign-in error: ${error.message}`;
+        console.error(error);
       }
-    },
-    { once: true }
+    }
   );
 };
 

@@ -47,7 +47,7 @@
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com wss://api.deepgram.com https://api.deepgram.com http://localhost:3000 http://localhost:8080;"
   },
   "oauth2": {
-    "client_id": "837567341884-crat3qdlnqf60gbe5cgjlludjeti81r4.apps.googleusercontent.com",
+    "client_id": "837567341884-dv012smvdultmrmkh1ibv6gi1396fifd.apps.googleusercontent.com",
     "scopes": [
       "profile",
       "email",
