@@ -1,0 +1,650 @@
+/* sidepanel.css - Premium AI Chat UI */
+
+/* ============================================
+   CSS Variables - Theme System
+   ============================================ */
+:root {
+  /* Spacing & Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* Effects */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+  --backdrop-blur: blur(12px);
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dark Theme (Default) */
+:root,
+[data-theme="dark"] {
+  /* Core Colors */
+  --bg-main: #09090b;
+  /* Deepest black */
+  --bg-secondary: #18181b;
+  /* Dark grey */
+  --bg-tertiary: #27272a;
+  /* Lighter grey */
+
+  /* Text Colors */
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+
+  /* UI Elements */
+  --border: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.12);
+  --glass-bg: rgba(24, 24, 27, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.05);
+
+  /* Accents */
+  --primary: #8b5cf6;
+  --primary-dark: #7c3aed;
+  --primary-light: #a78bfa;
+  --primary-gradient: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  --primary-gradient-hover: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+  --shadow-glow: 0 0 15px rgba(139, 92, 246, 0.3);
+
+  /* Status */
+  --success: #10b981;
+  --error: #ef4444;
+  --warning: #f59e0b;
+}
+
+/* Light Theme */
+[data-theme="light"] {
+  /* Core Colors */
+  --bg-main: #ffffff;
+  --bg-secondary: #f4f4f5;
+  /* zinc-100 */
+  --bg-tertiary: #e4e4e7;
+  /* zinc-200 */
+
+  /* Text Colors */
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #a1a1aa;
+
+  /* UI Elements */
+  --border: rgba(0, 0, 0, 0.08);
+  --border-light: rgba(0, 0, 0, 0.12);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(0, 0, 0, 0.05);
+
+  /* Accents (More vibrant for light mode) */
+  --primary: #7c3aed;
+  --primary-dark: #6d28d9;
+  --primary-light: #8b5cf6;
+  --primary-gradient: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+  --primary-gradient-hover: linear-gradient(135deg, #6d28d9 0%, #4338ca 100%);
+  --shadow-glow: 0 4px 12px rgba(124, 58, 237, 0.2);
+
+  /* Status */
+  --success: #059669;
+  --error: #dc2626;
+  --warning: #d97706;
+}
+
+/* ============================================
+   Base Styles
+   ============================================ */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-main);
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow: hidden;
+  font-size: 14px;
+}
+
+#ai-chat-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-height: 100vh;
+  background: radial-gradient(circle at top right, rgba(139, 92, 246, 0.05), transparent 40%),
+    radial-gradient(circle at bottom left, rgba(99, 102, 241, 0.05), transparent 40%);
+}
+
+/* ============================================
+   Header - Glassmorphism
+   ============================================ */
+.chat-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  transition: all var(--transition-smooth);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-icon {
+  font-size: 1.5rem;
+  filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.4));
+  animation: float 4s ease-in-out infinite;
+}
+
+.chat-header h1 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  background: linear-gradient(to right, #fff, #a1a1aa);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: white;
+  /* Fallback */
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  color: var(--text-secondary);
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+  transform: translateY(-1px);
+}
+
+.icon-btn:active {
+  transform: translateY(0);
+}
+
+/* ============================================
+   Sync Status
+   ============================================ */
+.sync-status {
+  margin-top: 68px;
+  /* Offset for absolute header */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: rgba(16, 185, 129, 0.1);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+  font-size: 0.85rem;
+  color: var(--success);
+}
+
+.sync-status.hidden {
+  display: none;
+}
+
+.sync-icon {
+  animation: spin 1.5s linear infinite;
+}
+
+/* ============================================
+   Chat Area
+   ============================================ */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 84px 20px 140px;
+  /* Top padding for header, bottom for floating input */
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  /* Note: scroll-behavior removed - controlled via JavaScript for flexibility */
+}
+
+/* Custom Scrollbar */
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ============================================
+   Message Bubbles
+   ============================================ */
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 88%;
+  opacity: 0;
+  animation: messageSlideIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* User Message */
+.message-user {
+  align-self: flex-end;
+}
+
+.message-user .message-bubble {
+  background: var(--primary-gradient);
+  color: white;
+  border-radius: var(--radius-lg) var(--radius-lg) 2px var(--radius-lg);
+  box-shadow: var(--shadow-glow);
+}
+
+.message-user .message-time {
+  text-align: right;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Assistant Message */
+.message-assistant {
+  align-self: flex-start;
+}
+
+.message-assistant .message-bubble {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) 2px;
+}
+
+/* Common Bubble Styles */
+.message-bubble {
+  padding: 14px 18px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.message-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Formatting inside messages */
+.message-bubble code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.message-user .message-bubble code {
+  background: rgba(0, 0, 0, 0.2);
+  color: white;
+}
+
+.message-assistant .message-bubble code {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--primary-light);
+}
+
+/* ============================================
+   Load More Button
+   ============================================ */
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.load-more-btn {
+  padding: 8px 24px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.load-more-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--primary-light);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.load-more-spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* ============================================
+   Floating Input Area (Ultra Modern)
+   ============================================ */
+.chat-input-area {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0 16px 20px;
+  background: linear-gradient(to top, var(--bg-main) 70%, transparent);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: var(--radius-full);
+  padding: 6px 6px 6px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.input-wrapper:focus-within {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(139, 92, 246, 0.5);
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.15), 0 0 0 1px rgba(139, 92, 246, 0.3);
+  transform: translateY(-2px);
+}
+
+#chat-input {
+  flex: 1;
+  resize: none;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  max-height: 100px;
+  outline: none;
+  padding: 8px 0;
+}
+
+#chat-input::placeholder {
+  color: var(--text-muted);
+  font-weight: 300;
+}
+
+/* Modern Send Button */
+.send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  background: var(--primary);
+  background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.send-btn::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.2), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.send-btn:hover {
+  transform: scale(1.1) rotate(-10deg);
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.5);
+}
+
+.send-btn:hover::after {
+  opacity: 1;
+}
+
+.send-btn:active {
+  transform: scale(0.95);
+}
+
+.send-btn:disabled {
+  background: var(--bg-tertiary);
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.send-icon {
+  font-size: 1.1rem;
+  margin-left: 2px;
+  /* Visual centering */
+  color: white;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.1));
+}
+
+/* ============================================
+   Action Buttons (Stop/Regenerate - Pills)
+   ============================================ */
+.input-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: -16px;
+  /* Pull up */
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 5;
+  pointer-events: none;
+  /* Let clicks pass through container */
+}
+
+.action-btn {
+  pointer-events: auto;
+  /* Re-enable clicks */
+  padding: 8px 16px;
+  background: rgba(24, 24, 27, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.action-btn:hover {
+  background: rgba(39, 39, 42, 0.9);
+  color: var(--text-primary);
+  border-color: var(--primary-light);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(167, 139, 250, 0.2);
+}
+
+.action-btn.hidden {
+  display: none !important;
+}
+
+/* ============================================
+   Welcome Screen
+   ============================================ */
+.welcome-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
+  gap: 20px;
+  height: 100%;
+  animation: fadeIn 0.5s ease;
+}
+
+.welcome-icon {
+  font-size: 3.5rem;
+  margin-bottom: 8px;
+  animation: float 4s ease-in-out infinite;
+  filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.3));
+}
+
+.welcome-message h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(to right, #fff, #9ca3af);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: white;
+  /* Fallback */
+}
+
+.welcome-message p {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  max-width: 300px;
+  line-height: 1.6;
+}
+
+/* ============================================
+   Loading Animation
+   ============================================ */
+.loading-dots span {
+  width: 6px;
+  height: 6px;
+  background: var(--primary-light);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.loading-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.hidden {
+  display: none !important;
+}

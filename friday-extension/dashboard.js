@@ -474,6 +474,7 @@ chrome.storage.local.get(
 function loadMeetingList(uid) {
   const cacheKey = `meeting_cache_${uid}`;
   let networkFinished = false;
+  let cachedIds = []; // Track cached meeting IDs for comparison
 
   // 1. Try to load from local cache first for instant UI
   chrome.storage.local.get([cacheKey], (result) => {
@@ -481,6 +482,7 @@ function loadMeetingList(uid) {
     if (result[cacheKey] && Array.isArray(result[cacheKey])) {
       console.log("Loaded meetings from local cache");
       cachedMeetings = result[cacheKey];
+      cachedIds = cachedMeetings.map(m => m.meetingId);
       renderMeetingList();
     }
   });
@@ -496,10 +498,21 @@ function loadMeetingList(uid) {
       freshMeetings.push(data);
     });
 
-    // Update memory cache and local storage
-    cachedMeetings = freshMeetings;
-    chrome.storage.local.set({ [cacheKey]: freshMeetings });
-    renderMeetingList();
+    // SMART RE-RENDER: Only re-render if data actually changed
+    const freshIds = freshMeetings.map(m => m.meetingId);
+    const isDifferent = freshMeetings.length !== cachedMeetings.length ||
+      freshIds.some((id, i) => id !== cachedIds[i]);
+
+    if (isDifferent) {
+      console.log("📋 Meeting list changed, re-rendering");
+      cachedMeetings = freshMeetings;
+      chrome.storage.local.set({ [cacheKey]: freshMeetings });
+      renderMeetingList();
+    } else {
+      console.log("📋 Meeting list unchanged, skipping re-render");
+      // Still update cache silently (in case data fields changed)
+      chrome.storage.local.set({ [cacheKey]: freshMeetings });
+    }
   }).catch((error) => {
     console.error("Error loading meetings:", error);
   });
@@ -762,7 +775,7 @@ function openOrFocusChatWindow() {
             if (chrome.sidePanel.setOptions) {
               await chrome.sidePanel.setOptions({
                 enabled: true,
-                path: 'chat.html'
+                path: 'sidepanel.html'
               });
               // No need to store tabId - panel is window-level now
             }
@@ -815,7 +828,7 @@ function launchChatWindow() {
 
   chrome.windows.create(
     {
-      url: chrome.runtime.getURL("chat.html"),
+      url: chrome.runtime.getURL("sidepanel.html"),
       type: "popup",
       focused: true,
       width: chatWidth,

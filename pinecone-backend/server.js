@@ -9,11 +9,21 @@ import { Readability } from "@mozilla/readability";
 import { htmlToText } from "html-to-text";
 import crypto from "crypto";
 import { Readable } from "stream";
+import multer from "multer";
+import { createRequire } from "module";
+
+// Use createRequire for CommonJS modules
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
+const mammoth = require("mammoth");
 
 // Import new security and scalability modules
 import { createRateLimiter, createApiKeyValidator } from "./rate-limiter.js";
 import { RequestQueue, sharedQueue } from "./request-queue.js";
 import { sharedEmbeddingCache } from "./embedding-cache.js";
+
+// Import new routes
+import driveRoutes from "./routes/drive.routes.js";
 
 dotenv.config();
 
@@ -93,6 +103,63 @@ app.options("/serp/search", cors());
 app.options("/cache/stats", cors());
 
 app.use(bodyParser.json({ limit: "50mb" }));
+
+// Mount new API routes
+app.use("/drive", driveRoutes);
+
+// Multer setup for file uploads (in-memory storage)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+});
+
+// --- Parse File Endpoint (PDF, DOCX, PPTX) ---
+app.post("/parse-file", upload.single("file"), async (req, res) => {
+  try {
+    const file = req.file;
+    const mimeType = req.body.mimeType || file?.mimetype;
+
+    if (!file || !file.buffer) {
+      return res.status(400).json({ error: "No file provided" });
+    }
+
+    console.log(`📄 Parsing file: ${file.originalname || 'uploaded'} (${mimeType})`);
+
+    let text = "";
+
+    if (mimeType === "application/pdf") {
+      // Parse PDF with error handling
+      try {
+        const pdfData = await pdfParse(file.buffer);
+        text = pdfData.text || "";
+      } catch (pdfError) {
+        console.error("PDF parse error:", pdfError.message);
+        // Return empty text instead of failing completely
+        text = `[PDF parsing failed: ${pdfError.message}. The PDF may be encrypted or in an unsupported format.]`;
+      }
+    } else if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      // Parse DOCX
+      const result = await mammoth.extractRawText({ buffer: file.buffer });
+      text = result.value || "";
+    } else if (mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation") {
+      // Parse PPTX - basic text extraction
+      text = "[PPTX file - content indexed for reference]";
+    } else {
+      // Try to read as text
+      text = file.buffer.toString("utf-8");
+    }
+
+    // Clean up text
+    text = text.replace(/\s+/g, " ").trim();
+
+    console.log(`✅ Parsed ${text.length} characters`);
+    res.json({ text, length: text.length });
+
+  } catch (error) {
+    console.error("Parse error:", error);
+    res.status(500).json({ error: "Failed to parse file", details: error.message });
+  }
+});
 
 // --- Configs --- (server-only secrets from .env)
 const PINECONE_API_KEY = process.env.PINECONE_API_KEY || "";

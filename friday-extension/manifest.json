@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Friday",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Friday - AI Powered Meeting Assistant with Real-time Transcription",
   "action": {
     "default_popup": "popup.html",
@@ -41,7 +41,7 @@
     "http://localhost:8080/*"
   ],
   "side_panel": {
-    "default_path": "chat.html"
+    "default_path": "sidepanel.html"
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com wss://api.deepgram.com https://api.deepgram.com http://localhost:3000 http://localhost:8080;"
@@ -69,7 +69,16 @@
         "transcription-content-v3.js",
         "deepgram-transcription.js",
         "toast-notifications.js",
-        "chat.html",
+        "sidepanel.html",
+        "sidepanel.css",
+        "ai-chat/index.js",
+        "ai-chat/config.js",
+        "ai-chat/chat-controller.js",
+        "ai-chat/chat-ui.js",
+        "ai-chat/rag-service.js",
+        "ai-chat/storage-service.js",
+        "ai-chat/drive-service.js",
+        "ai-chat/scraper-service.js",
         "libs/mammoth.browser.min.js",
         "libs/pdf.js",
         "libs/pdf.worker.js"
