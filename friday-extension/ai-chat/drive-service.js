@@ -159,15 +159,46 @@ function isSupportedFile(mimeType) {
 /**
  * Chunk text for embedding
  */
-function chunkText(text, chunkSize = 1000, overlap = 100) {
+/**
+ * Chunk text respecting sentence boundaries
+ */
+function chunkText(text, chunkSize = 1000, overlap = 200) {
     const chunks = [];
-    let i = 0;
-    while (i < text.length) {
-        const end = Math.min(i + chunkSize, text.length);
-        chunks.push(text.slice(i, end));
-        if (end === text.length) break;
-        i = end - overlap;
+    if (!text) return chunks;
+
+    // Split by sentence delimiters but keep them
+    const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+
+    let currentChunk = "";
+
+    for (const sentence of sentences) {
+        // If single sentence is too long, split by words
+        if (sentence.length > chunkSize) {
+            const words = sentence.split(" ");
+            for (const word of words) {
+                if ((currentChunk + word).length > chunkSize) {
+                    chunks.push(currentChunk.trim());
+                    // Keep overlap
+                    currentChunk = currentChunk.slice(-overlap) + word + " ";
+                } else {
+                    currentChunk += word + " ";
+                }
+            }
+        }
+        // Add sentence to chunk
+        else if ((currentChunk + sentence).length > chunkSize) {
+            chunks.push(currentChunk.trim());
+            // Start new chunk with overlap from previous
+            currentChunk = currentChunk.slice(-overlap) + sentence;
+        } else {
+            currentChunk += sentence;
+        }
     }
+
+    if (currentChunk.trim()) {
+        chunks.push(currentChunk.trim());
+    }
+
     return chunks;
 }
 

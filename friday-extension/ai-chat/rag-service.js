@@ -253,11 +253,100 @@ export async function ragQuery(query, meetingId, options = {}) {
 }
 
 // ============================================
+// Query Classification
+// ============================================
+
+/**
+ * Classify user query type
+ * @param {string} query - User's input
+ * @returns {'greeting' | 'meta' | 'document'} - Query type
+ */
+export function classifyQuery(query) {
+    const lowerQuery = query.toLowerCase().trim();
+    
+    // Greeting patterns
+    const greetings = [
+        /^(hi|hello|hey|good morning|good afternoon|good evening)[\s!.,?]*$/,
+        /^how are you/,
+        /^what'?s up/,
+        /^yo[\s!]*$/,
+    ];
+    
+    // Meta patterns (questions about the AI itself)
+    const metaPatterns = [
+        /^who are you/,
+        /^what can you do/,
+        /^help$/,
+        /^what are you/,
+        /^introduce yourself/,
+    ];
+    
+    // Thank you / acknowledgment patterns
+    const thankPatterns = [
+        /^thanks?/,
+        /^ok thanks/,
+        /^thank you/,
+        /^great$/,
+        /^awesome$/,
+        /^perfect$/,
+        /^got it/,
+        /^okay$/,
+        /^ok$/,
+    ];
+    
+    for (const pattern of greetings) {
+        if (pattern.test(lowerQuery)) return 'greeting';
+    }
+    
+    for (const pattern of metaPatterns) {
+        if (pattern.test(lowerQuery)) return 'meta';
+    }
+    
+    for (const pattern of thankPatterns) {
+        if (pattern.test(lowerQuery)) return 'greeting';
+    }
+    
+    return 'document';
+}
+
+// ============================================
 // Prompt Building
 // ============================================
 
 /**
- * Build system prompt with context
+ * Build prompt for greetings and meta questions (no RAG needed)
+ */
+export function buildConversationalPrompt(query, queryType, conversationHistory = []) {
+    let systemContent;
+    
+    if (queryType === 'greeting') {
+        systemContent = `You are Friday, a friendly AI meeting assistant built into a Chrome extension.
+The user just greeted you or acknowledged something. Respond warmly and briefly.
+- Keep your response to 1-2 sentences maximum.
+- You can mention that you're here to help with their meeting documents if it feels natural.
+- Be friendly, warm, and conversational.
+- Don't be overly formal or robotic.`;
+    } else if (queryType === 'meta') {
+        systemContent = `You are Friday, an AI meeting assistant built into a Chrome extension.
+
+Your capabilities:
+- Answer questions about documents synced from Google Drive
+- Summarize meeting notes and files
+- Find specific information across multiple documents
+- Help with meeting-related queries
+
+Respond naturally and briefly (2-3 sentences). Don't list every capability unless specifically asked "what can you do".`;
+    }
+    
+    return [
+        { role: "system", content: systemContent },
+        ...conversationHistory.slice(-4),
+        { role: "user", content: query }
+    ];
+}
+
+/**
+ * Build system prompt with context for document questions
  */
 export function buildPrompt(query, snippets, conversationHistory = []) {
     const hasContext = snippets && snippets.length > 0;
@@ -273,29 +362,32 @@ export function buildPrompt(query, snippets, conversationHistory = []) {
         const sourceFiles = [...new Set(snippets.map(s => s.source))];
 
         // When we have relevant context, prioritize it
-        systemContent = `You are a helpful AI assistant. Answer questions using the provided context from the user's documents.
+        systemContent = `You are Friday, a helpful AI meeting assistant.
 
 CONTEXT FROM DOCUMENTS:
 ${contextText}
 
 INSTRUCTIONS:
-- Answer using the information from the documents above
+- Synthesize a clear, concise answer in your own words based on the context above
+- Do NOT copy-paste large chunks of text verbatim from the documents
+- Summarize and explain the key points naturally, as if you're explaining to a colleague
+- If the user asks "who is X?" or "what is X?", give a brief 1-3 sentence summary, not a full biography or detailed explanation
+- Keep answers focused and to the point
 - Do NOT use inline citations like [1], [2], etc. in your response
-- Write a natural, flowing response without citation markers
 - At the END of your response, add a blank line and then list the sources like this:
   📄 Sources: ${sourceFiles.join(", ")}
-- Be concise and accurate`;
+- Be concise, accurate, and conversational`;
     } else {
-        // When no context is found - tell user to sync files
-        systemContent = `You are an AI assistant that ONLY answers from the user's documents.
+        // When no context is found - be helpful but honest
+        systemContent = `You are Friday, an AI meeting assistant. You primarily help with questions about the user's indexed documents.
 
 No relevant information was found in the indexed documents for this question.
 
-Please tell the user:
-1. No relevant content was found in their indexed files
-2. They should check if their Google Drive folder has been synced
-3. They can click the sync button to index their files
-4. Ask them to try again after syncing`;
+Please:
+1. Politely let the user know you couldn't find relevant information in their synced files
+2. Suggest they sync their Google Drive folder if they haven't already (click the sync button)
+3. Offer to help if they rephrase their question or ask about something else
+4. Keep your response brief and helpful`;
     }
 
     const systemMessage = {

@@ -38,13 +38,14 @@
     "https://api.deepgram.com/*",
     "wss://api.deepgram.com/*",
     "http://localhost:3000/*",
+    "http://localhost:3001/*",
     "http://localhost:8080/*"
   ],
   "side_panel": {
     "default_path": "sidepanel.html"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com wss://api.deepgram.com https://api.deepgram.com http://localhost:3000 http://localhost:8080;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com wss://api.deepgram.com https://api.deepgram.com http://localhost:3000 http://localhost:3001 http://localhost:8080;"
   },
   "oauth2": {
     "client_id": "837567341884-dv012smvdultmrmkh1ibv6gi1396fifd.apps.googleusercontent.com",

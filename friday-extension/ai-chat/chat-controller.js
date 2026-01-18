@@ -243,37 +243,91 @@ export async function sendMessage(query, options = {}) {
     // Save user message to Firestore
     storageService.saveMessage(currentUserId, currentMeetingId, "user", query).catch(console.error);
 
-    // Show loading
-    chatUI.showLoading("Searching documents...");
-
     try {
         abortController = new AbortController();
         const signal = abortController.signal;
 
-        // 1. RAG search
-        const ragResult = await ragService.ragQuery(query, currentMeetingId, { signal });
+        // Classify the query first
+        const queryType = ragService.classifyQuery(query);
+        console.log(`🏷️ Query classified as: ${queryType}`);
 
-        console.log("🎯 RAG Result:", {
-            totalResults: ragResult.totalResults,
-            filteredResults: ragResult.filteredResults,
-            snippets: ragResult.snippets.map(s => ({
-                source: s.source,
-                score: s.score?.toFixed(3),
-                preview: s.text?.slice(0, 150)
-            }))
-        });
+        let messages;
 
-        if (signal.aborted) return;
+        if (queryType === 'greeting' || queryType === 'meta') {
+            // Skip RAG for greetings and meta questions - respond conversationally
+            chatUI.showLoading("Thinking...");
+            messages = ragService.buildConversationalPrompt(query, queryType, conversationHistory);
+            console.log(`💬 Using conversational prompt for ${queryType}`);
 
-        chatUI.updateLoadingMessage("Generating response...");
+            if (signal.aborted) return;
 
-        // 2. Build prompt with context
-        const messages = ragService.buildPrompt(query, ragResult.snippets, conversationHistory);
-        console.log("📝 Prompt context length:", ragResult.snippets.length, "snippets");
+            // Stream response for greetings/meta
+            chatUI.hideLoading();
+            const response = await streamResponse(messages, signal);
 
-        // 3. Stream response
-        chatUI.hideLoading();
-        const response = await streamResponse(messages, signal);
+            if (signal.aborted) return;
+
+            // Save assistant response
+            const assistantTimestamp = new Date().toISOString();
+            conversationHistory.push({ role: "assistant", content: response, timestamp: assistantTimestamp });
+
+            // Update cache and save to Firestore
+            await storageService.setChatCache(currentMeetingId, conversationHistory);
+            storageService.saveMessage(currentUserId, currentMeetingId, "assistant", response).catch(console.error);
+            return;
+        } else {
+            // Document question - use LangChain RAG Chat endpoint
+            chatUI.showLoading("Searching documents with AI...");
+
+            console.log("🔗 Using LangChain RAG Chat endpoint");
+
+            // Call /chat endpoint which handles RAG + Memory internally
+            const chatResponse = await fetch(`${CONFIG.SERVER_URL}/chat`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    query: query,
+                    session_id: currentMeetingId || "default",
+                    meeting_id: currentMeetingId,
+                    namespace: currentMeetingId ? `meeting:${currentMeetingId}` : "documents"
+                }),
+                signal,
+            });
+
+            if (!chatResponse.ok) {
+                throw new Error(`Chat failed: ${chatResponse.status}`);
+            }
+
+            const result = await chatResponse.json();
+            console.log("🎯 LangChain RAG Result:", result);
+
+            if (signal.aborted) return;
+
+            chatUI.hideLoading();
+
+            // Display the answer with typewriter effect
+            const typewriter = chatUI.createAssistantMessage();
+            const answer = result.answer || "I couldn't find a relevant answer.";
+
+            // Add sources if available
+            let fullResponse = answer;
+            if (result.sources && result.sources.length > 0) {
+                const sourceNames = [...new Set(result.sources.map(s => s.metadata?.filename || s.metadata?.source || "Document"))];
+                fullResponse += `\n\n📚 **Sources:** ${sourceNames.slice(0, 3).join(", ")}`;
+            }
+
+            typewriter.write(fullResponse);
+            typewriter.finish();
+
+            // Save assistant response
+            const assistantTimestamp = new Date().toISOString();
+            conversationHistory.push({ role: "assistant", content: fullResponse, timestamp: assistantTimestamp });
+
+            // Update cache and save to Firestore
+            await storageService.setChatCache(currentMeetingId, conversationHistory);
+            storageService.saveMessage(currentUserId, currentMeetingId, "assistant", fullResponse).catch(console.error);
+            return;
+        }
 
         if (signal.aborted) return;
 

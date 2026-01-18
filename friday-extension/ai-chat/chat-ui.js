@@ -148,6 +148,23 @@ export function renderMessagesInstant(messages) {
 }
 
 /**
+ * Create an assistant message placeholder and return a typewriter instance
+ */
+export function createAssistantMessage() {
+    if (!chatContainer) return null;
+
+    // Create empty message
+    const wrapper = createMessageElement("assistant", "", new Date().toISOString());
+    chatContainer.appendChild(wrapper);
+    scrollToBottom();
+
+    const bubble = wrapper.querySelector(".message-bubble");
+
+    // Return typewriter attached to this bubble
+    return createTypewriter(bubble);
+}
+
+/**
  * Clear all messages
  */
 export function clearMessages() {

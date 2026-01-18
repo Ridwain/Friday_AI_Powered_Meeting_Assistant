@@ -2,13 +2,14 @@
 // Centralized configuration for the AI chat system
 
 export const CONFIG = {
-  // Backend server URL
-  SERVER_URL: "http://localhost:3000",
+  // Backend server URL (Python LangChain server)
+  // For Node.js backup, use: "http://localhost:3000"
+  SERVER_URL: "http://localhost:3001",
 
   // RAG (Retrieval-Augmented Generation) settings
   RAG: {
     topK: 5,                      // Number of results to retrieve
-    similarityThreshold: 0.7,     // Minimum similarity score
+    similarityThreshold: 0.45,     // Minimum similarity score (lowered for better recall)
     maxContextTokens: 6000,       // Max tokens for context
     searchTimeoutMs: 8000,        // Search timeout
     chunkSize: 1000,              // Text chunk size for indexing

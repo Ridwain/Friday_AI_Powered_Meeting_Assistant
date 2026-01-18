@@ -72,3 +72,15 @@ node_modules/
 
 # macOS
 .DS_Store
+.env.example
+
+
+# Python
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/

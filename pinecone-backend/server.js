@@ -14,8 +14,21 @@ import { createRequire } from "module";
 
 // Use createRequire for CommonJS modules
 const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
+
+// pdf-parse v1.x - CommonJS module
+const pdfParse = require("pdf-parse");
+
+// Import officeparser for PPTX parsing
+import { parseOffice } from "officeparser";
+
+// Import JSZip for custom PPTX parsing (more reliable)
+import JSZip from "jszip";
+
+// Import OCR libraries for scanned PDF support
+import Tesseract from 'tesseract.js';
+import { createCanvas } from 'canvas';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 // Import new security and scalability modules
 import { createRateLimiter, createApiKeyValidator } from "./rate-limiter.js";
@@ -76,7 +89,7 @@ app.use(
 // --- SECURITY: Rate Limiting ---
 const rateLimiter = createRateLimiter({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000, // 1 minute
-  maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 500, // Increased for file sync
   message: 'Too many requests. Please wait before trying again.',
 });
 
@@ -113,6 +126,68 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 });
 
+// --- OCR Helper Function for Scanned PDFs ---
+/**
+ * Extract text from scanned PDF using OCR
+ * @param {Buffer} buffer - PDF file buffer
+ * @returns {Promise<string>} - Extracted text
+ */
+async function extractPdfWithOCR(buffer) {
+  console.log("🔍 Starting OCR extraction...");
+
+  // Convert Buffer to Uint8Array for pdfjs-dist
+  const uint8Array = new Uint8Array(buffer);
+  const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
+  const numPages = pdf.numPages;
+  let fullText = '';
+
+  console.log(`📄 PDF has ${numPages} pages, processing with OCR...`);
+
+  // Limit to first 10 pages to avoid timeout
+  const maxPages = Math.min(numPages, 10);
+
+  for (let i = 1; i <= maxPages; i++) {
+    console.log(`📖 OCR processing page ${i}/${maxPages}...`);
+
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 2.0 }); // Higher scale = better OCR accuracy
+
+    // Create canvas
+    const canvas = createCanvas(viewport.width, viewport.height);
+    const context = canvas.getContext('2d');
+
+    // Render PDF page to canvas
+    await page.render({
+      canvasContext: context,
+      viewport: viewport
+    }).promise;
+
+    // OCR the image
+    const { data: { text } } = await Tesseract.recognize(
+      canvas.toBuffer('image/png'),
+      'eng', // Language - English
+      {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            // Silent - don't log progress
+          }
+        }
+      }
+    );
+
+    if (text && text.trim()) {
+      fullText += text + '\n\n';
+    }
+  }
+
+  if (numPages > maxPages) {
+    fullText += `\n[Note: Only first ${maxPages} of ${numPages} pages were processed via OCR]`;
+  }
+
+  console.log(`✅ OCR complete: ${fullText.length} characters extracted`);
+  return fullText.trim();
+}
+
 // --- Parse File Endpoint (PDF, DOCX, PPTX) ---
 app.post("/parse-file", upload.single("file"), async (req, res) => {
   try {
@@ -128,22 +203,96 @@ app.post("/parse-file", upload.single("file"), async (req, res) => {
     let text = "";
 
     if (mimeType === "application/pdf") {
-      // Parse PDF with error handling
+      // Two-tier PDF parsing: fast extraction first, OCR fallback if needed
       try {
+        // Step 1: Fast text extraction using pdf-parse v1.x
         const pdfData = await pdfParse(file.buffer);
         text = pdfData.text || "";
+
+        // Step 2: Check if meaningful text was extracted
+        const cleanText = text.replace(/\s+/g, ' ').trim();
+
+        if (cleanText.length < 100) {
+          console.log("📄 PDF has little text (<100 chars), trying OCR...");
+          try {
+            text = await extractPdfWithOCR(file.buffer);
+          } catch (ocrError) {
+            console.error("OCR failed:", ocrError.message);
+            text = cleanText || `[PDF appears to be scanned. OCR failed: ${ocrError.message}]`;
+          }
+        }
       } catch (pdfError) {
         console.error("PDF parse error:", pdfError.message);
-        // Return empty text instead of failing completely
-        text = `[PDF parsing failed: ${pdfError.message}. The PDF may be encrypted or in an unsupported format.]`;
+        // Try OCR as complete fallback
+        try {
+          console.log("📄 pdf-parse failed, trying OCR fallback...");
+          text = await extractPdfWithOCR(file.buffer);
+        } catch (ocrError) {
+          console.error("OCR also failed:", ocrError.message);
+          text = `[PDF parsing failed: ${pdfError.message}]`;
+        }
       }
     } else if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
       // Parse DOCX
       const result = await mammoth.extractRawText({ buffer: file.buffer });
       text = result.value || "";
     } else if (mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation") {
-      // Parse PPTX - basic text extraction
-      text = "[PPTX file - content indexed for reference]";
+      // Parse PPTX using JSZip - PPTX is a ZIP containing XML files
+      try {
+        console.log("📊 Parsing PPTX with JSZip...");
+        const zip = await JSZip.loadAsync(file.buffer);
+        const textParts = [];
+
+        // Get all slide XML files
+        const slideFiles = Object.keys(zip.files)
+          .filter(name => name.match(/ppt\/slides\/slide\d+\.xml$/))
+          .sort((a, b) => {
+            const numA = parseInt(a.match(/slide(\d+)/)[1]);
+            const numB = parseInt(b.match(/slide(\d+)/)[1]);
+            return numA - numB;
+          });
+
+        console.log(`📑 Found ${slideFiles.length} slides`);
+
+        for (const slideFile of slideFiles) {
+          const content = await zip.file(slideFile).async("string");
+          // Extract text from <a:t> tags (PowerPoint text elements)
+          const textMatches = content.match(/<a:t>([^<]*)<\/a:t>/g) || [];
+          const slideText = textMatches
+            .map(match => match.replace(/<a:t>|<\/a:t>/g, ""))
+            .filter(t => t.trim())
+            .join(" ");
+          if (slideText) {
+            textParts.push(slideText);
+          }
+        }
+
+        // Also check notes slides
+        const notesFiles = Object.keys(zip.files)
+          .filter(name => name.match(/ppt\/notesSlides\/notesSlide\d+\.xml$/));
+
+        for (const notesFile of notesFiles) {
+          const content = await zip.file(notesFile).async("string");
+          const textMatches = content.match(/<a:t>([^<]*)<\/a:t>/g) || [];
+          const notesText = textMatches
+            .map(match => match.replace(/<a:t>|<\/a:t>/g, ""))
+            .filter(t => t.trim())
+            .join(" ");
+          if (notesText) {
+            textParts.push(notesText);
+          }
+        }
+
+        text = textParts.join("\n\n");
+        console.log(`📊 Extracted text from ${slideFiles.length} slides, ${notesFiles.length} notes`);
+
+        if (!text || text.trim().length === 0) {
+          text = "[PPTX file appears to be empty or contains only images]";
+        }
+      } catch (pptxError) {
+        console.error("PPTX parse error:", pptxError.message);
+        text = `[PPTX parsing failed: ${pptxError.message}]`;
+      }
     } else {
       // Try to read as text
       text = file.buffer.toString("utf-8");
