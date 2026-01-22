@@ -5,6 +5,29 @@ import os
 class Settings(BaseSettings):
     # API Keys
     GOOGLE_API_KEY: str = ""
+    
+    # OAuth Credentials - Development (Localhost)
+    GOOGLE_CLIENT_ID_DEV: str = ""
+    GOOGLE_CLIENT_SECRET_DEV: str = ""
+    
+    # OAuth Credentials - Production (Live)
+    GOOGLE_CLIENT_ID_PROD: str = ""
+    GOOGLE_CLIENT_SECRET_PROD: str = ""
+    
+    # Dynamic OAuth Property
+    @property
+    def GOOGLE_CLIENT_ID(self):
+        # If running on typical local ports, use DEV keys
+        if self.PORT in [3000, 3001, 8000, 5000]: 
+            return self.GOOGLE_CLIENT_ID_DEV or self.GOOGLE_CLIENT_ID_PROD
+        return self.GOOGLE_CLIENT_ID_PROD
+
+    @property
+    def GOOGLE_CLIENT_SECRET(self):
+        if self.PORT in [3000, 3001, 8000, 5000]:
+            return self.GOOGLE_CLIENT_SECRET_DEV or self.GOOGLE_CLIENT_SECRET_PROD
+        return self.GOOGLE_CLIENT_SECRET_PROD
+
     PINECONE_API_KEY: str = ""
     PINECONE_INDEX_HOST: str = ""
     PINECONE_INDEX_NAME: str = "siat"

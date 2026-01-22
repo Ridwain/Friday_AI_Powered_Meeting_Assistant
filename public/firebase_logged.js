@@ -30,6 +30,9 @@ const logoutBtn = document.getElementById("logout-btn");
 const meetingForm = document.getElementById("meeting-form");
 const meetingsList = document.getElementById("meetings-list");
 
+// Backend API URL
+const API_BASE_URL = isLocalhost ? "http://localhost:3001" : "https://friday-backend-production.up.railway.app"; // Replace with actual prod URL
+
 // Main Form Inputs
 const dateInput = document.getElementById("meeting-date");
 const timeInput = document.getElementById("meeting-time");
@@ -294,38 +297,142 @@ function initGapiClient() {
   });
 }
 
+// --- PKCE Helper Functions ---
+
+function generateCodeVerifier() {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode.apply(null, array))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+async function generateCodeChallenge(verifier) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return btoa(String.fromCharCode.apply(null, new Uint8Array(digest)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+function generateState() {
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  return Array.from(array, b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// --- OAuth Authorization Code Flow ---
+
+let authResolve = null;
+let authReject = null;
+let currentCodeVerifier = null;
+
+const CLIENT_ID_PROD = "837567341884-0qp9pv773cmos8favl2po8ibhkkv081s.apps.googleusercontent.com"; // Web Client (Live)
+const CLIENT_ID_DEV = "837567341884-hk6ldlrhdlg0cqnadebgg7s41h1s6l24.apps.googleusercontent.com";   // Web Client Dev (Localhost)
+
 function initializeTokenClient() {
-  tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: "837567341884-0qp9pv773cmos8favl2po8ibhkkv081s.apps.googleusercontent.com",
-    scope: "https://www.googleapis.com/auth/drive.readonly", // Sufficient for selecting folders
-    callback: (tokenResponse) => {
-      if (tokenResponse.error) {
-        console.error("Token error:", tokenResponse);
-        alert("Authorization failed");
-      } else {
-        gapi.client.setToken(tokenResponse);
+  // Select ID based on environment
+  const targetClientId = isLocalhost ? CLIENT_ID_DEV : CLIENT_ID_PROD;
+  console.log("Initializing OAuth with Client ID:", isLocalhost ? "DEV" : "PROD");
+
+  // We use the same variable name 'tokenClient' to minimize refactoring, 
+  // but it now holds a Code Client.
+  tokenClient = google.accounts.oauth2.initCodeClient({
+    client_id: targetClientId,
+    scope: "https://www.googleapis.com/auth/drive.readonly",
+    ux_mode: "popup",
+    callback: async (response) => {
+      if (response.error) {
+        console.error("Auth error:", response);
+        if (authReject) authReject(response);
+        return;
+      }
+
+      // CSRF Check: Validate State
+      const returnedState = response.state;
+      const storedState = sessionStorage.getItem("oauth_state");
+
+      // Clear state immediately to prevent reuse
+      sessionStorage.removeItem("oauth_state");
+
+      if (returnedState !== storedState) {
+        console.error("State mismatch – possible CSRF attack", { returned: returnedState, stored: storedState });
+        if (authReject) authReject(new Error("Invalid state parameter - Authorization failed"));
+        return;
+      }
+
+      if (!response.code) {
+        if (authReject) authReject(new Error("No authorization code received"));
+        return;
+      }
+
+      // Exchange code for token via backend
+      try {
+        const tokenResponse = await fetch(`${API_BASE_URL}/oauth/exchange`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code: response.code,
+            code_verifier: currentCodeVerifier,
+            redirect_uri: "postmessage" // Required for popup UX
+          })
+        });
+
+        if (!tokenResponse.ok) {
+          const errData = await tokenResponse.json();
+          throw new Error(errData.detail || "Token exchange failed");
+        }
+
+        const tokens = await tokenResponse.json();
+
+        // Resolve the original promise with the access token
+        // The structure should match what gapi expects or just the access_token
+        if (authResolve) authResolve({
+          access_token: tokens.access_token,
+          expires_in: tokens.expires_in,
+          scope: tokens.scope,
+          token_type: tokens.token_type
+        });
+
+      } catch (err) {
+        console.error("Token exchange error:", err);
+        if (authReject) authReject(err);
+      } finally {
+        // Cleanup
+        authResolve = null;
+        authReject = null;
+        currentCodeVerifier = null;
       }
     }
   });
 }
 
-function requestAccessToken() {
-  return new Promise((resolve, reject) => {
-    // Generate cryptographic state for CSRF protection
-    const state = crypto.randomUUID();
-    sessionStorage.setItem('oauth_state', state);
+async function requestAccessToken() {
+  return new Promise(async (resolve, reject) => {
+    authResolve = resolve;
+    authReject = reject;
 
-    tokenClient.callback = (token) => {
-      // Clean up stored state
-      sessionStorage.removeItem('oauth_state');
+    try {
+      // 1. Generate PKCE & State
+      currentCodeVerifier = generateCodeVerifier();
+      const codeChallenge = await generateCodeChallenge(currentCodeVerifier);
 
-      if (token.error) {
-        reject(token);
-      } else {
-        resolve(token);
-      }
-    };
-    tokenClient.requestAccessToken({ prompt: "consent", state });
+      const state = generateState();
+      sessionStorage.setItem("oauth_state", state);
+
+      // 2. Request Authorization Code
+      // We pass code_challenge to Google (even though creating client didn't enforce it, we send it now)
+      tokenClient.requestCode({
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
+        state: state
+      });
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 

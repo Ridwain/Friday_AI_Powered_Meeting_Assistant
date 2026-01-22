@@ -97,6 +97,14 @@ app.include_router(scrape.router, tags=["Web Scraping"])
 app.include_router(serp.router, tags=["Search Engine"])
 app.include_router(drive.router, tags=["Google Drive"])
 
+# OAuth Router (Authorization Code Flow)
+try:
+    from app.routes import oauth
+    app.include_router(oauth.router, tags=["OAuth"])
+    print("✅ OAuth routes enabled")
+except ImportError as e:
+    print(f"⚠️ OAuth routes not available: {e}")
+
 # LangChain RAG Chat (with memory)
 try:
     from app.routes import rag_chat
