@@ -180,9 +180,12 @@ export function buildContext(results, query, options = {}) {
 
         if (estimatedTokens + tokens > maxTokens) break;
 
+        // Extract source name - prefer filename/title over URL
+        const sourceName = extractSourceName(result);
+
         snippets.push({
             id: result.id,
-            source: result.metadata?.filename || result.filename || "Document",
+            source: sourceName,
             text: trimmed,
             score: result.score || 0,
         });
@@ -192,6 +195,33 @@ export function buildContext(results, query, options = {}) {
 
     return snippets;
 }
+
+/**
+ * Extract human-readable source name from result metadata
+ * NEVER returns URLs - only filenames or generic labels
+ */
+function extractSourceName(result) {
+    const meta = result.metadata || {};
+
+    // Check all possible filename fields (in priority order)
+    const possibleNames = [
+        result.filename,           // Top-level from search.py
+        meta.filename,             // In metadata
+        meta.title,                // Title field
+        meta.name,                 // Name field
+    ];
+
+    for (const name of possibleNames) {
+        // Return if it's a valid name (not empty, not a URL)
+        if (name && typeof name === 'string' && !name.startsWith('http') && name.trim()) {
+            return name.trim();
+        }
+    }
+
+    // Generic fallback - never show URLs
+    return "Document";
+}
+
 
 /**
  * Estimate token count (rough)
@@ -263,7 +293,7 @@ export async function ragQuery(query, meetingId, options = {}) {
  */
 export function classifyQuery(query) {
     const lowerQuery = query.toLowerCase().trim();
-    
+
     // Greeting patterns
     const greetings = [
         /^(hi|hello|hey|good morning|good afternoon|good evening)[\s!.,?]*$/,
@@ -271,7 +301,7 @@ export function classifyQuery(query) {
         /^what'?s up/,
         /^yo[\s!]*$/,
     ];
-    
+
     // Meta patterns (questions about the AI itself)
     const metaPatterns = [
         /^who are you/,
@@ -280,7 +310,7 @@ export function classifyQuery(query) {
         /^what are you/,
         /^introduce yourself/,
     ];
-    
+
     // Thank you / acknowledgment patterns
     const thankPatterns = [
         /^thanks?/,
@@ -293,19 +323,19 @@ export function classifyQuery(query) {
         /^okay$/,
         /^ok$/,
     ];
-    
+
     for (const pattern of greetings) {
         if (pattern.test(lowerQuery)) return 'greeting';
     }
-    
+
     for (const pattern of metaPatterns) {
         if (pattern.test(lowerQuery)) return 'meta';
     }
-    
+
     for (const pattern of thankPatterns) {
         if (pattern.test(lowerQuery)) return 'greeting';
     }
-    
+
     return 'document';
 }
 
@@ -318,7 +348,7 @@ export function classifyQuery(query) {
  */
 export function buildConversationalPrompt(query, queryType, conversationHistory = []) {
     let systemContent;
-    
+
     if (queryType === 'greeting') {
         systemContent = `You are Friday, a friendly AI meeting assistant built into a Chrome extension.
 The user just greeted you or acknowledged something. Respond warmly and briefly.
@@ -337,7 +367,7 @@ Your capabilities:
 
 Respond naturally and briefly (2-3 sentences). Don't list every capability unless specifically asked "what can you do".`;
     }
-    
+
     return [
         { role: "system", content: systemContent },
         ...conversationHistory.slice(-4),
@@ -358,8 +388,10 @@ export function buildPrompt(query, snippets, conversationHistory = []) {
     let systemContent;
 
     if (hasContext) {
-        // Get unique source file names
-        const sourceFiles = [...new Set(snippets.map(s => s.source))];
+        // Get unique source file names - FILTER OUT any URLs that might have slipped through
+        const sourceFiles = [...new Set(snippets.map(s => s.source))]
+            .filter(name => name && !name.startsWith('http'))
+            .map(name => name === 'Unknown' ? 'Document' : name);
 
         // When we have relevant context, prioritize it
         systemContent = `You are Friday, a helpful AI meeting assistant.
@@ -374,8 +406,7 @@ INSTRUCTIONS:
 - If the user asks "who is X?" or "what is X?", give a brief 1-3 sentence summary, not a full biography or detailed explanation
 - Keep answers focused and to the point
 - Do NOT use inline citations like [1], [2], etc. in your response
-- At the END of your response, add a blank line and then list the sources like this:
-  📄 Sources: ${sourceFiles.join(", ")}
+- Do NOT mention or list the source filenames at the end of your answer
 - Be concise, accurate, and conversational`;
     } else {
         // When no context is found - be helpful but honest

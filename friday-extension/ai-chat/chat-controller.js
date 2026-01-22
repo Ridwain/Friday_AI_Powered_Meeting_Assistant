@@ -311,10 +311,7 @@ export async function sendMessage(query, options = {}) {
 
             // Add sources if available
             let fullResponse = answer;
-            if (result.sources && result.sources.length > 0) {
-                const sourceNames = [...new Set(result.sources.map(s => s.metadata?.filename || s.metadata?.source || "Document"))];
-                fullResponse += `\n\n📚 **Sources:** ${sourceNames.slice(0, 3).join(", ")}`;
-            }
+            // Sources hidden per user request
 
             typewriter.write(fullResponse);
             typewriter.finish();
@@ -409,6 +406,7 @@ async function streamResponse(messages, signal) {
     const decoder = new TextDecoder();
     let fullResponse = "";
     let chunkCount = 0;
+    let incompleteBuffer = "";  // Buffer for incomplete SSE lines (handles split chunks)
 
     try {
         while (true) {
@@ -418,7 +416,8 @@ async function streamResponse(messages, signal) {
                 break;
             }
 
-            const chunk = decoder.decode(value, { stream: true });
+            // Combine with previous incomplete data
+            const chunk = incompleteBuffer + decoder.decode(value, { stream: true });
             chunkCount++;
 
             // Debug: log raw chunk data
@@ -427,6 +426,8 @@ async function streamResponse(messages, signal) {
             }
 
             const lines = chunk.split("\n");
+            // Save last potentially incomplete line for next iteration
+            incompleteBuffer = lines.pop() || "";
 
             for (const line of lines) {
                 if (!line.startsWith("data: ")) continue;

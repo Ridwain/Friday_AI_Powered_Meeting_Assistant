@@ -1,5 +1,5 @@
 // ai-chat/drive-service.js
-// Google Drive file fetching and sync using Chrome identity API
+// Google Drive file sync - delegates to Python backend for processing
 
 import { CONFIG } from "./config.js";
 import * as storageService from "./storage-service.js";
@@ -10,253 +10,37 @@ import * as storageService from "./storage-service.js";
 
 /**
  * Get Google OAuth access token using Chrome identity API
+ * Requests Drive scope incrementally (only when this function is called)
  */
 export async function getAccessToken() {
     return new Promise((resolve, reject) => {
-        chrome.identity.getAuthToken({ interactive: true }, (token) => {
+        // Request token (scopes are now handled by manifest)
+        chrome.identity.getAuthToken({
+            interactive: true
+        }, (token) => {
             if (chrome.runtime.lastError) {
-                console.error("OAuth error:", chrome.runtime.lastError);
-                reject(new Error(chrome.runtime.lastError.message));
+                const errorMsg = chrome.runtime.lastError.message;
+                console.error("OAuth error:", errorMsg);
+
+                // Handle user denial gracefully
+                if (errorMsg.includes('canceled') || errorMsg.includes('denied')) {
+                    reject(new Error('Drive access was not granted. Please login again to grant permissions.'));
+                } else {
+                    reject(new Error(errorMsg));
+                }
             } else if (!token) {
                 reject(new Error("No token received"));
             } else {
-                console.log("✅ Got OAuth token");
+                console.log("✅ Got OAuth token for Drive access");
                 resolve(token);
             }
         });
     });
 }
 
-// ============================================
-// Drive API
-// ============================================
-
-const DRIVE_API = "https://www.googleapis.com/drive/v3";
-
-/**
- * List files in a Drive folder
- */
-async function listFolderFiles(folderId, accessToken) {
-    const query = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
-    const fields = "files(id,name,mimeType,modifiedTime)";
-
-    const response = await fetch(
-        `${DRIVE_API}/files?q=${query}&fields=${fields}`,
-        {
-            headers: { Authorization: `Bearer ${accessToken}` },
-        }
-    );
-
-    if (!response.ok) {
-        throw new Error(`Drive API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.files || [];
-}
-
-/**
- * Download file content from Drive
- */
-async function downloadFile(fileId, mimeType, accessToken) {
-    // Google Workspace files - export as text
-    const exportTypes = {
-        "application/vnd.google-apps.document": "text/plain",
-        "application/vnd.google-apps.spreadsheet": "text/csv",
-        "application/vnd.google-apps.presentation": "text/plain",
-    };
-
-    // Office files - need to copy to Google format first, then export
-    // OR download and parse on backend (we'll use backend parsing)
-    const officeTypes = [
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
-        "application/pdf", // .pdf
-    ];
-
-    let url;
-    if (exportTypes[mimeType]) {
-        // Google Workspace files - export as text
-        url = `${DRIVE_API}/files/${fileId}/export?mimeType=${encodeURIComponent(exportTypes[mimeType])}`;
-    } else if (officeTypes.includes(mimeType)) {
-        // Office/PDF files - download binary and send to backend for parsing
-        url = `${DRIVE_API}/files/${fileId}?alt=media`;
-
-        const response = await fetch(url, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-        });
-
-        if (!response.ok) {
-            throw new Error(`Download failed: ${response.status}`);
-        }
-
-        // Get as blob and send to backend for parsing
-        const blob = await response.blob();
-        return await parseFileOnBackend(blob, mimeType);
-    } else {
-        // Regular text files - download directly
-        url = `${DRIVE_API}/files/${fileId}?alt=media`;
-    }
-
-    const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (!response.ok) {
-        throw new Error(`Download failed: ${response.status}`);
-    }
-
-    return response.text();
-}
-
-/**
- * Parse binary files (PDF, DOCX, PPTX) via backend
- */
-async function parseFileOnBackend(blob, mimeType) {
-    const formData = new FormData();
-    formData.append("file", blob);
-    formData.append("mimeType", mimeType);
-
-    const response = await fetch(`${CONFIG.SERVER_URL}/parse-file`, {
-        method: "POST",
-        body: formData,
-    });
-
-    if (!response.ok) {
-        throw new Error(`Parse failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.text || "";
-}
-
-/**
- * Check if file type is supported for indexing
- */
-function isSupportedFile(mimeType) {
-    const supported = [
-        // Text files
-        "text/plain",
-        "text/markdown",
-        "text/csv",
-        // Google Workspace
-        "application/vnd.google-apps.document",
-        "application/vnd.google-apps.spreadsheet",
-        "application/vnd.google-apps.presentation",
-        // Office files
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
-        // PDF
-        "application/pdf",
-    ];
-    return supported.includes(mimeType);
-}
 
 // ============================================
-// Indexing
-// ============================================
-
-/**
- * Chunk text for embedding
- */
-/**
- * Chunk text respecting sentence boundaries
- */
-function chunkText(text, chunkSize = 1000, overlap = 200) {
-    const chunks = [];
-    if (!text) return chunks;
-
-    // Split by sentence delimiters but keep them
-    const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
-
-    let currentChunk = "";
-
-    for (const sentence of sentences) {
-        // If single sentence is too long, split by words
-        if (sentence.length > chunkSize) {
-            const words = sentence.split(" ");
-            for (const word of words) {
-                if ((currentChunk + word).length > chunkSize) {
-                    chunks.push(currentChunk.trim());
-                    // Keep overlap
-                    currentChunk = currentChunk.slice(-overlap) + word + " ";
-                } else {
-                    currentChunk += word + " ";
-                }
-            }
-        }
-        // Add sentence to chunk
-        else if ((currentChunk + sentence).length > chunkSize) {
-            chunks.push(currentChunk.trim());
-            // Start new chunk with overlap from previous
-            currentChunk = currentChunk.slice(-overlap) + sentence;
-        } else {
-            currentChunk += sentence;
-        }
-    }
-
-    if (currentChunk.trim()) {
-        chunks.push(currentChunk.trim());
-    }
-
-    return chunks;
-}
-
-/**
- * Index a file to Pinecone
- */
-async function indexFile(filename, content, meetingId) {
-    const chunks = chunkText(content);
-    console.log(`📦 Indexing ${filename}: ${chunks.length} chunks`);
-
-    for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i];
-
-        // Get embedding
-        const embedResponse = await fetch(`${CONFIG.SERVER_URL}/ai/embed`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: chunk }),
-        });
-
-        if (!embedResponse.ok) {
-            console.error(`Embedding failed for chunk ${i}`);
-            continue;
-        }
-
-        const { embedding } = await embedResponse.json();
-
-        // Upsert to Pinecone
-        const vector = {
-            id: `${meetingId}_${filename}_${i}`,
-            values: embedding,
-            metadata: {
-                filename,
-                meetingId,
-                chunkIndex: i,
-                content: chunk.slice(0, 1000),
-                wordCount: chunk.split(/\s+/).length,
-            },
-        };
-
-        await fetch(`${CONFIG.SERVER_URL}/upsert`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                namespace: CONFIG.NAMESPACES.getMeetingNs(meetingId),
-                vectors: [vector]
-            }),
-        });
-
-        // Rate limiting
-        await new Promise((r) => setTimeout(r, 200));
-    }
-
-    console.log(`✅ Indexed ${filename}`);
-}
-
-// ============================================
-// Sync Flow
+// Folder ID Extraction
 // ============================================
 
 /**
@@ -279,14 +63,19 @@ export function extractFolderId(driveUrl) {
     return null;
 }
 
+// ============================================
+// Backend-Delegated Sync
+// ============================================
+
 let syncInProgress = false;
 
 /**
- * Sync files from a Drive folder
+ * Sync files from a Drive folder - delegates to Python backend
+ * Backend handles: Recursive loading, incremental sync, parsing, embedding, upserting
  */
 export async function syncMeetingFiles(meeting, onProgress) {
     if (syncInProgress) {
-        console.log("⏳ Sync already in progress");
+        console.log("⏳ Sync is currently running. Please wait for the '✅ [FRIDAY AI] Auto-sync COMPLETE' message.");
         return { synced: 0, skipped: 0 };
     }
 
@@ -297,66 +86,72 @@ export async function syncMeetingFiles(meeting, onProgress) {
     }
 
     syncInProgress = true;
-    let synced = 0;
-    let skipped = 0;
 
     try {
-        // Get OAuth token
-        const accessToken = await getAccessToken();
+        // Attempt 1: Get token and sync
+        onProgress?.("Authenticating...");
+        let accessToken = await getAccessToken();
 
-        // List files
-        onProgress?.("Listing files...");
-        const files = await listFolderFiles(folderId, accessToken);
-        console.log(`📁 Found ${files.length} files in folder`);
+        onProgress?.("Syncing files (processing on server)...");
+        console.log(`📁 Calling /drive/sync for folder ${folderId}`);
 
-        // Get indexed files
-        const indexed = await storageService.getIndexedFiles(meeting.meetingId);
+        let response = await fetch(`${CONFIG.SERVER_URL}/drive/sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                folderId,
+                accessToken,
+                meetingId: meeting.meetingId,
+                namespace: CONFIG.NAMESPACES.getMeetingNs(meeting.meetingId)
+            })
+        });
 
-        for (const file of files) {
-            if (!isSupportedFile(file.mimeType)) {
-                console.log(`⏭️ Skipping unsupported: ${file.name}`);
-                skipped++;
-                continue;
-            }
+        // Retry Logic: If 401/403 or sync failed, refresh token and retry ONCE
+        let shouldRetry = !response.ok && (response.status === 401 || response.status === 403 || response.status === 500);
 
-            // Check if already indexed with same modified time
-            if (indexed[file.id] === file.modifiedTime) {
-                console.log(`✅ Already indexed: ${file.name}`);
-                skipped++;
-                continue;
-            }
+        if (shouldRetry) {
+            console.log("⚠️ Sync failed or auth error - Retrying with fresh token...");
+            onProgress?.("Refreshing session...");
 
-            try {
-                onProgress?.(`Indexing ${file.name}...`);
+            // Invalidate cached token
+            await new Promise(resolve =>
+                chrome.identity.removeCachedAuthToken({ token: accessToken }, resolve)
+            );
 
-                // Download file
-                const content = await downloadFile(file.id, file.mimeType, accessToken);
+            // Get fresh token
+            accessToken = await getAccessToken();
 
-                if (!content || content.trim().length < 50) {
-                    console.log(`⚠️ File too short: ${file.name}`);
-                    skipped++;
-                    continue;
-                }
-
-                // Index to Pinecone
-                await indexFile(file.name, content, meeting.meetingId);
-
-                // Mark as indexed
-                await storageService.markFileIndexed(meeting.meetingId, file.id, file.modifiedTime);
-                synced++;
-
-            } catch (fileError) {
-                console.error(`❌ Error processing ${file.name}:`, fileError);
-                skipped++;
-            }
+            // Retry sync request
+            response = await fetch(`${CONFIG.SERVER_URL}/drive/sync`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    folderId,
+                    accessToken,
+                    meetingId: meeting.meetingId,
+                    namespace: CONFIG.NAMESPACES.getMeetingNs(meeting.meetingId)
+                })
+            });
         }
 
-        console.log(`✅ Sync complete: ${synced} synced, ${skipped} skipped`);
-        return { synced, skipped, total: files.length };
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Sync failed: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log(`✅ Sync complete: ${result.syncedCount} synced, ${result.skippedCount} skipped`);
+
+        return {
+            synced: result.syncedCount,
+            skipped: result.skippedCount,
+            total: result.totalFiles,
+            errors: result.errors
+        };
 
     } catch (error) {
         console.error("Sync error:", error);
-        return { synced, skipped, error: error.message };
+        return { synced: 0, skipped: 0, error: error.message };
     } finally {
         syncInProgress = false;
     }
@@ -371,7 +166,7 @@ export function getSyncStatus() {
 
 /**
  * Auto-sync on meeting open - runs automatically when chat opens
- * Checks for new or modified files in background
+ * Delegates to Python backend for all processing
  */
 export async function autoSync(meeting, options = {}) {
     const { silent = true, onProgress } = options;
@@ -384,16 +179,15 @@ export async function autoSync(meeting, options = {}) {
     const folderId = extractFolderId(meeting.driveFolderLink);
     if (!folderId) return { synced: 0, skipped: 0, error: "Invalid folder URL" };
 
-    console.log("🔄 Auto-sync: Checking for new/modified files...");
+    console.log("🔄 Auto-sync: Starting server-side sync...");
 
     try {
-        // Always sync to check for new/modified files
         const result = await syncMeetingFiles(meeting, onProgress);
 
         if (result.synced > 0) {
-            console.log(`✅ Auto-sync: Indexed ${result.synced} new/modified files`);
+            console.log(`✅ [FRIDAY AI] Auto-sync COMPLETE: Indexed ${result.synced} new/modified files from Drive.`);
         } else {
-            console.log("✅ Auto-sync: All files up to date");
+            console.log("✅ [FRIDAY AI] Auto-sync COMPLETE: Local index is already up to date.");
         }
 
         return result;
@@ -402,3 +196,4 @@ export async function autoSync(meeting, options = {}) {
         return { synced: 0, skipped: 0, error: error.message };
     }
 }
+

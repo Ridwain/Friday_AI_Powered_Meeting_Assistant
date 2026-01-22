@@ -24,6 +24,46 @@ def get_cache_key(text: str) -> str:
     """Generate cache key for text"""
     return hashlib.md5(text.encode()).hexdigest()
 
+
+async def get_embedding_internal(text: str) -> Optional[List[float]]:
+    """
+    Internal function to get embedding for text.
+    Used by drive.py and other internal modules.
+    """
+    if not text or len(text.strip()) < 10:
+        return None
+    
+    trimmed = text[:8000]
+    cache_key = get_cache_key(trimmed)
+    
+    # Check cache
+    if cache_key in embedding_cache:
+        return embedding_cache[cache_key]
+    
+    try:
+        import google.generativeai as genai
+        
+        genai.configure(api_key=settings.GOOGLE_API_KEY)
+        
+        result = genai.embed_content(
+            model="models/text-embedding-004",
+            content=trimmed,
+            task_type="retrieval_document"
+        )
+        
+        embedding = result['embedding']
+        
+        # Cache
+        if len(embedding_cache) < MAX_CACHE_SIZE:
+            embedding_cache[cache_key] = embedding
+        
+        return embedding
+        
+    except Exception as e:
+        print(f"❌ Embedding error: {str(e)}")
+        return None
+
+
 @router.post("/ai/embed", response_model=EmbedResponse)
 async def get_embedding(request: EmbedRequest):
     """Generate embedding for text using Google Generative AI"""
@@ -59,3 +99,4 @@ async def get_embedding(request: EmbedRequest):
     except Exception as e:
         print(f"❌ Embedding error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Embedding failed: {str(e)}")
+

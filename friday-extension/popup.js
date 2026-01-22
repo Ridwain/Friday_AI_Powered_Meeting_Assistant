@@ -2,6 +2,8 @@ chrome.storage.local.get(["email", "uid"], (result) => {
   if (result.email && result.uid) {
     window.location.href = "dashboard.html";
   } else {
+    // Show login page only after confirming user is NOT logged in
+    document.body.style.visibility = 'visible';
     // Notify background script that extension page is available
     chrome.runtime.sendMessage({ type: "EXTENSION_PAGE_CONNECTED" });
   }
@@ -382,82 +384,52 @@ loginForm.addEventListener("submit", async (e) => {
 });
 
 googleBtn.onclick = () => {
-  // Use the new Web Application Client ID for secure flow
-  const clientId = "837567341884-4dnaoequvhd1km5rhmogjiq3n7bav4it.apps.googleusercontent.com";
-  const scopes = [
-    "profile",
-    "email",
-    "https://www.googleapis.com/auth/drive.readonly",
-    "https://www.googleapis.com/auth/userinfo.email"
-  ];
-
-  // Generate a random state for CSRF protection
-  const state = Math.random().toString(36).substring(7);
-  chrome.storage.local.set({ oauth_state: state });
-
-  // Get Chrome's built-in redirect URL for secure OAuth
-  const redirectUri = chrome.identity.getRedirectURL();
-  const authUrl =
-    `https://accounts.google.com/o/oauth2/v2/auth?` +
-    `client_id=${clientId}&` +
-    `response_type=token&` +
-    `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-    `scope=${encodeURIComponent(scopes.join(" "))}&` +
-    `state=${state}&` +
-    `prompt=select_account`;
-
   status.innerText = "Opening secure login...";
 
-  // Use Chrome's secure identity API instead of manual popup
-  chrome.identity.launchWebAuthFlow(
-    { url: authUrl, interactive: true },
-    async (responseUrl) => {
-      // Handle errors or user cancellation
-      if (chrome.runtime.lastError || !responseUrl) {
+  function authenticate(retry = true) {
+    chrome.identity.getAuthToken({ interactive: true }, async (token) => {
+      if (chrome.runtime.lastError || !token) {
         status.innerText = `Login cancelled or failed: ${chrome.runtime.lastError?.message || "Unknown error"}`;
         return;
       }
 
       try {
-        const url = new URL(responseUrl);
-        const hash = url.hash.substring(1);
-        const params = new URLSearchParams(hash);
+        status.innerText = "Signing in with Firebase...";
 
-        // Verify state to prevent CSRF
-        const returnedState = params.get("state");
-        const storedState = await new Promise(resolve =>
-          chrome.storage.local.get(['oauth_state'], res => resolve(res.oauth_state))
+        const credential = GoogleAuthProvider.credential(null, token);
+        const result = await signInWithCredential(auth, credential);
+        const user = result.user;
+
+        chrome.storage.local.set(
+          { email: user.email, uid: user.uid },
+          () => {
+            window.location.href = "dashboard.html";
+          }
         );
-
-        if (returnedState !== storedState) {
-          status.innerText = "Security check failed: State mismatch.";
-          return;
-        }
-
-        const accessToken = params.get("access_token");
-
-        if (accessToken) {
-          status.innerText = "Signing in with Firebase...";
-          const credential = GoogleAuthProvider.credential(null, accessToken);
-          const result = await signInWithCredential(auth, credential);
-          const user = result.user;
-
-          chrome.storage.local.set(
-            { email: user.email, uid: user.uid },
-            () => {
-              window.location.href = "dashboard.html";
-            }
-          );
-        } else {
-          status.innerText = "Failed to get access token.";
-        }
       } catch (error) {
-        status.innerText = `Sign-in error: ${error.message}`;
-        console.error(error);
+        console.error("Sign-in error:", error);
+
+        // Handle invalid token (e.g. user revoked access externally)
+        if (retry && (error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-id-token')) {
+          status.innerText = "Refreshing security token...";
+          console.log("🔄 Invalid token detected. Clearing cache and retrying...");
+
+          // Remove the bad token from cache
+          chrome.identity.removeCachedAuthToken({ token: token }, () => {
+            // Retry ONCE with fresh token
+            authenticate(false);
+          });
+        } else {
+          status.innerText = `Sign-in error: ${error.message}`;
+        }
       }
-    }
-  );
+    });
+  }
+
+  // Start auth flow
+  authenticate(true);
 };
+
 
 chrome.storage.local.get(["email", "uid"], async (result) => {
   if (result.email && result.uid) {
@@ -491,6 +463,17 @@ async function loadMeetings(uid) {
 
 logoutBtn.onclick = async () => {
   try {
+    // Revoke OAuth token before signing out (security best practice)
+    chrome.identity.getAuthToken({ interactive: false }, (token) => {
+      if (token) {
+        // Revoke the token with Google
+        fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`)
+          .catch(() => { }); // Best-effort revocation
+        // Remove cached token from Chrome
+        chrome.identity.removeCachedAuthToken({ token }, () => { });
+      }
+    });
+
     await signOut(auth);
     chrome.storage.local.remove(["email", "uid"]);
     status.innerText = "Logged out.";
@@ -499,6 +482,7 @@ logoutBtn.onclick = async () => {
     status.innerText = `Logout error: ${error.message}`;
   }
 };
+
 
 // Open Side Panel
 const openSidePanelBtn = document.getElementById("openSidePanelBtn");

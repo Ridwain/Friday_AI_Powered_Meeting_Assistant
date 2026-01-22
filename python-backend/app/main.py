@@ -10,7 +10,7 @@ import time
 import re
 
 from app.config import settings, validate_settings
-from app.routes import health, parse, search, chat, embed
+from app.routes import health, parse, search, chat, embed, scrape, serp, drive
 
 # Validate settings on startup
 validate_settings()
@@ -19,7 +19,7 @@ validate_settings()
 app = FastAPI(
     title="Friday Python Backend",
     description="LangChain-powered AI backend for Friday Chrome Extension",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 # CORS Configuration
@@ -93,6 +93,9 @@ app.include_router(parse.router, tags=["Parsing"])
 app.include_router(search.router, tags=["Search"])
 app.include_router(chat.router, tags=["Chat"])
 app.include_router(embed.router, tags=["Embedding"])
+app.include_router(scrape.router, tags=["Web Scraping"])
+app.include_router(serp.router, tags=["Search Engine"])
+app.include_router(drive.router, tags=["Google Drive"])
 
 # LangChain RAG Chat (with memory)
 try:
@@ -106,7 +109,7 @@ except ImportError as e:
 @app.on_event("startup")
 async def startup_event():
     print(f"""
-🚀 Friday Python Backend v1.0 (LangChain)
+🚀 Friday Python Backend v2.0 (Unified Backend)
    Running at http://localhost:{settings.PORT}
 
 📊 Pinecone Index: {settings.PINECONE_INDEX_NAME}
@@ -116,19 +119,24 @@ async def startup_event():
    - Rate Limiting: {RATE_LIMIT_MAX} req/min
 
 📡 Available endpoints:
-   GET  /health        - Health check
-   GET  /stats         - Pinecone stats
-   POST /search        - Semantic search
-   POST /upsert        - Upsert vectors
-   POST /delete        - Delete vectors
-   POST /parse-file    - Parse PDF, DOCX, PPTX
-   POST /ai/embed      - Get embeddings
-   POST /ai/stream     - Chat completion (SSE)
+   GET  /health         - Health check
+   GET  /stats          - Pinecone stats
+   POST /search         - Semantic search
+   POST /upsert         - Upsert vectors
+   POST /delete         - Delete vectors
+   POST /parse-file     - Parse PDF, DOCX, XLSX, Images, etc.
+   POST /ai/embed       - Get embeddings
+   POST /ai/stream      - Chat completion (SSE)
+   POST /scrape-url     - Scrape web URL
+   POST /scrape-and-upsert - Scrape and index
+   POST /serp/search    - Google search proxy
+   POST /drive/sync     - Sync Google Drive folder
 
-✅ Server ready!
+✅ Server ready! (Node.js backend deprecated)
 """)
 
 # Shutdown event
 @app.on_event("shutdown")
 async def shutdown_event():
     print("🛑 Gracefully shutting down server...")
+

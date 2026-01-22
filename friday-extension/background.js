@@ -7,82 +7,87 @@ let transcriptionState = {
   transcriptDocId: null, // Store the document ID for the current session
 };
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "LOGIN_SUCCESS") {
-    chrome.storage.local.set({
-      email: message.email,
-      uid: message.uid,
-    });
-    console.log("Stored user:", message.email);
-  }
+// Check for API availability (prevents errors if run in wrong context)
+if (chrome?.runtime?.onMessage) {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === "LOGIN_SUCCESS") {
+      chrome.storage.local.set({
+        email: message.email,
+        uid: message.uid,
+      });
+      console.log("Stored user:", message.email);
+    }
 
-  // Handle transcription control messages
-  if (message.type === "START_TRANSCRIPTION") {
-    startBackgroundTranscription(message.meeting, message.uid)
-      .then(() => sendResponse({ success: true }))
-      .catch((error) => sendResponse({ success: false, error: error.message }));
-    return true; // Keep message channel open for async response
-  }
+    // Handle transcription control messages
+    if (message.type === "START_TRANSCRIPTION") {
+      startBackgroundTranscription(message.meeting, message.uid)
+        .then(() => sendResponse({ success: true }))
+        .catch((error) => sendResponse({ success: false, error: error.message }));
+      return true; // Keep message channel open for async response
+    }
 
-  if (message.type === "STOP_TRANSCRIPTION") {
-    stopBackgroundTranscription()
-      .then(() => sendResponse({ success: true }))
-      .catch((error) => sendResponse({ success: false, error: error.message }));
-    return true;
-  }
+    if (message.type === "STOP_TRANSCRIPTION") {
+      stopBackgroundTranscription()
+        .then(() => sendResponse({ success: true }))
+        .catch((error) => sendResponse({ success: false, error: error.message }));
+      return true;
+    }
 
-  if (message.type === "GET_TRANSCRIPTION_STATUS") {
-    sendResponse({ isTranscribing: transcriptionState.isTranscribing });
-  }
+    if (message.type === "GET_TRANSCRIPTION_STATUS") {
+      sendResponse({ isTranscribing: transcriptionState.isTranscribing });
+    }
 
-  // Handle new transcript document messages
-  if (message.type === "INITIALIZE_TRANSCRIPT") {
-    initializeTranscriptDocument(
-      message.uid,
-      message.meetingId,
-      message.startTime
-    );
-  }
+    // Handle new transcript document messages
+    if (message.type === "INITIALIZE_TRANSCRIPT") {
+      initializeTranscriptDocument(
+        message.uid,
+        message.meetingId,
+        message.startTime
+      );
+    }
 
-  if (message.type === "UPDATE_TRANSCRIPT_REALTIME") {
-    updateTranscriptRealtime(
-      message.uid,
-      message.meetingId,
-      message.transcript,
-      message.lastUpdated
-    );
-  }
+    if (message.type === "UPDATE_TRANSCRIPT_REALTIME") {
+      updateTranscriptRealtime(
+        message.uid,
+        message.meetingId,
+        message.transcript,
+        message.lastUpdated
+      );
+    }
 
-  if (message.type === "FINALIZE_TRANSCRIPT") {
-    finalizeTranscriptDocument(
-      message.uid,
-      message.meetingId,
-      message.transcript,
-      message.endTime,
-      message.wordCount
-    );
-  }
+    if (message.type === "FINALIZE_TRANSCRIPT") {
+      finalizeTranscriptDocument(
+        message.uid,
+        message.meetingId,
+        message.transcript,
+        message.endTime,
+        message.wordCount
+      );
+    }
 
-  // Handle legacy messages for backward compatibility
-  if (message.type === "TRANSCRIPTION_RESULT") {
-    // Legacy handler - can be removed if not needed
-    console.log("Legacy transcription result received");
-  }
+    // Handle legacy messages for backward compatibility
+    if (message.type === "TRANSCRIPTION_RESULT") {
+      // Legacy handler - can be removed if not needed
+      console.log("Legacy transcription result received");
+    }
 
-  if (message.type === "TRANSCRIPTION_ERROR") {
-    broadcastTranscriptionError(message.error);
-    stopBackgroundTranscription();
-  }
+    if (message.type === "TRANSCRIPTION_ERROR") {
+      broadcastTranscriptionError(message.error);
+      stopBackgroundTranscription();
+    }
 
-  if (message.type === "CONTENT_SCRIPT_READY") {
-    sendResponse({ success: true });
-  }
+    if (message.type === "CONTENT_SCRIPT_READY") {
+      sendResponse({ success: true });
+    }
 
-  // Handle connection from extension pages
-  if (message.type === "EXTENSION_PAGE_CONNECTED") {
-    sendResponse({ success: true });
-  }
-});
+    // Handle connection from extension pages
+    if (message.type === "EXTENSION_PAGE_CONNECTED") {
+      sendResponse({ success: true });
+    }
+  });
+} else {
+  console.error("FRIDAY EXTENSION ERROR: chrome.runtime.onMessage is undefined. Context invalid?");
+}
 
 async function startBackgroundTranscription(meeting, uid) {
   if (transcriptionState.isTranscribing) {

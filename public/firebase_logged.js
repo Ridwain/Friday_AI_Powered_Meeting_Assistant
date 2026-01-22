@@ -311,16 +311,24 @@ function initializeTokenClient() {
 
 function requestAccessToken() {
   return new Promise((resolve, reject) => {
+    // Generate cryptographic state for CSRF protection
+    const state = crypto.randomUUID();
+    sessionStorage.setItem('oauth_state', state);
+
     tokenClient.callback = (token) => {
+      // Clean up stored state
+      sessionStorage.removeItem('oauth_state');
+
       if (token.error) {
         reject(token);
       } else {
         resolve(token);
       }
     };
-    tokenClient.requestAccessToken({ prompt: "consent" }); // Trigger auth popup
+    tokenClient.requestAccessToken({ prompt: "consent", state });
   });
 }
+
 
 // Generic Picker Launcher
 async function openDrivePicker(targetInput) {

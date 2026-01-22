@@ -24,6 +24,33 @@ class DeleteRequest(BaseModel):
     namespace: str = ""
 
 
+def extract_clean_filename(metadata: Dict) -> str:
+    """
+    Extract a clean filename from metadata.
+    Priority: filename > title > name > "Document"
+    NEVER returns URLs.
+    """
+    # Check multiple possible fields
+    possible_names = [
+        metadata.get("filename"),
+        metadata.get("title"),
+        metadata.get("name"),
+    ]
+    
+    for name in possible_names:
+        if name and isinstance(name, str):
+            name = name.strip()
+            # Skip if it's a URL
+            if name.startswith("http://") or name.startswith("https://"):
+                continue
+            # Skip if it's "Unknown"
+            if name.lower() == "unknown":
+                continue
+            if name:
+                return name
+    
+    return "Document"
+
 @router.post("/search")
 async def search_vectors(request: SearchRequest):
     """Search Pinecone for similar vectors"""
@@ -60,14 +87,21 @@ async def search_vectors(request: SearchRequest):
             print(f"✅ Found {len(matches)} matches")
             
             # Transform results
-            results = [{
-                "id": match.get("id", ""),
-                "score": match.get("score", 0),
-                "filename": match.get("metadata", {}).get("filename", "Unknown"),
-                "chunkIndex": match.get("metadata", {}).get("chunkIndex", 0),
-                "content": match.get("metadata", {}).get("content", ""),
-                "metadata": match.get("metadata", {})
-            } for match in matches]
+            results = []
+            for match in matches:
+                meta = match.get("metadata", {})
+                
+                # Extract clean filename - NEVER return URLs
+                filename = extract_clean_filename(meta)
+                
+                results.append({
+                    "id": match.get("id", ""),
+                    "score": match.get("score", 0),
+                    "filename": filename,
+                    "chunkIndex": meta.get("chunkIndex", 0),
+                    "content": meta.get("content", ""),
+                    "metadata": meta
+                })
             
             return results
             

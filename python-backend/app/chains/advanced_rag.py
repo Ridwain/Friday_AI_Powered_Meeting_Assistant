@@ -160,7 +160,7 @@ async def query_with_advanced_memory(
     if "source_documents" in result:
         print(f"📄 Top {len(result['source_documents'])} Chunks for: '{query}'")
         for i, doc in enumerate(result["source_documents"]):
-            # Sanitize metadata to remove numpy types
+            # Sanitize metadata to remove numpy types and cleanup filenames
             metadata = {}
             for k, v in doc.metadata.items():
                 if hasattr(v, 'item'):
@@ -168,7 +168,29 @@ async def query_with_advanced_memory(
                 else:
                      metadata[k] = v
             
-            print(f"[{i}] {metadata.get('filename', 'Unknown')} (Content: {doc.page_content[:100]}...)")
+            # Force clean filename (no URLs)
+            clean_name = "Document"
+            possible_names = [
+                metadata.get('filename'),
+                metadata.get('title'),
+                metadata.get('name')
+            ]
+            
+            for name in possible_names:
+                if name and isinstance(name, str):
+                    name_str = name.strip()
+                    if name_str and not name_str.startswith('http') and name_str.lower() != 'unknown':
+                        clean_name = name_str
+                        break
+            
+            # Ensure filename is set to the clean name
+            metadata['filename'] = clean_name
+            
+            # Remove source if it is a URL to prevent frontend fallback from using it
+            if metadata.get('source', '').startswith('http'):
+                metadata['source'] = clean_name
+            
+            print(f"[{i}] {metadata.get('filename')} (Content: {doc.page_content[:100]}...)")
             
             sources.append({
                 "content": doc.page_content,
