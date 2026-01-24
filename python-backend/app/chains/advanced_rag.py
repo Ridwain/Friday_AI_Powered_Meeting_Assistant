@@ -86,8 +86,15 @@ def get_advanced_retriever(namespace: str):
     )
     
     # 2. FlashRank Reranker (Contextual Compression)
+    # Use local cache to avoid /tmp issues by instantiating Ranker directly
+    from flashrank import Ranker
+    ranker_client = Ranker(
+        model_name="ms-marco-TinyBERT-L-2-v2",
+        cache_dir="model_cache"
+    )
+    
     compressor = FlashrankRerank(
-        model="ms-marco-TinyBERT-L-2-v2", 
+        client=ranker_client,
         top_n=5
     )
     
