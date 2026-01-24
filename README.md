@@ -46,6 +46,36 @@ The system consists of three main components working in harmony:
 2.  **Python Backend (Brain)**: Manages the RAG pipeline, processes embeddings, and communicates with the LLM.
 3.  **Firebase & Google Cloud (Infrastructure)**: Handles authentication, database storage, and file access.
 
+**RAG Pipeline Flow**:
+
+```text
+User Query
+    │
+    ▼
+[Multi-Query Expansion] (Gemini 2.5 Flash Lite)
+    │
+    ├──> Query 1
+    ├──> Query 2
+    ├──> Query 3
+    │
+    ▼
+[Vector Search] (Pinecone + Embedding 004)
+    │
+    │ (Retrieves ~10 docs)
+    ▼
+[FlashRank Reranker] (ms-marco-TinyBERT-L-2-v2)
+    │
+    │ (Selects Top 5)
+    ▼
+[Context Selection]
+    │
+    ▼
+[LLM Generation] (Gemini 2.5 Flash Lite)
+    │
+    ▼
+Final Answer + Citations
+```
+
 ---
 
 ## Tech Stack
