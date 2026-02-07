@@ -274,7 +274,6 @@ async function onDeleteMeeting(id) {
 
 let gapiInitialized = false;
 let pickerInitialized = false;
-let tokenClient;
 const folderNavigationStack = {};
 
 function initGapiClient() {
@@ -324,116 +323,125 @@ function generateState() {
   return Array.from(array, b => b.toString(16).padStart(2, "0")).join("");
 }
 
-// --- OAuth Authorization Code Flow ---
-
-let authResolve = null;
-let authReject = null;
-let currentCodeVerifier = null;
+// --- OAuth Authorization Code Flow (Server-Side Redirect) ---
 
 const CLIENT_ID_PROD = "837567341884-0qp9pv773cmos8favl2po8ibhkkv081s.apps.googleusercontent.com"; // Web Client (Live)
 const CLIENT_ID_DEV = "837567341884-hk6ldlrhdlg0cqnadebgg7s41h1s6l24.apps.googleusercontent.com";   // Web Client Dev (Localhost)
 
-function initializeTokenClient() {
-  // Select ID based on environment
-  const targetClientId = isLocalhost ? CLIENT_ID_DEV : CLIENT_ID_PROD;
-  console.log("Initializing OAuth with Client ID:", isLocalhost ? "DEV" : "PROD");
+/**
+ * Handle OAuth return - check if we're returning from OAuth flow
+ * Called on page load to process the access token from URL
+ */
+function handleOAuthReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const accessToken = params.get("access_token");
+  const expiresIn = params.get("expires_in");
+  const error = params.get("error");
 
-  // We use the same variable name 'tokenClient' to minimize refactoring, 
-  // but it now holds a Code Client.
-  tokenClient = google.accounts.oauth2.initCodeClient({
-    client_id: targetClientId,
-    scope: "https://www.googleapis.com/auth/drive.readonly",
-    ux_mode: "popup",
-    callback: async (response) => {
-      if (response.error) {
-        console.error("Auth error:", response);
-        if (authReject) authReject(response);
-        return;
-      }
+  if (error) {
+    console.error("OAuth error:", error);
+    alert("Authorization failed: " + error);
+    // Clean URL
+    window.history.replaceState({}, "", window.location.pathname);
+    return false;
+  }
 
-      // CSRF Check: Validate State
-      const returnedState = response.state;
-      const storedState = sessionStorage.getItem("oauth_state");
+  if (accessToken) {
+    console.log("✅ OAuth complete, token received from server callback");
 
-      // Clear state immediately to prevent reuse
-      sessionStorage.removeItem("oauth_state");
+    // Store token for gapi
+    gapi.client.setToken({ access_token: accessToken });
 
-      if (returnedState !== storedState) {
-        console.error("State mismatch – possible CSRF attack", { returned: returnedState, stored: storedState });
-        if (authReject) authReject(new Error("Invalid state parameter - Authorization failed"));
-        return;
-      }
+    // Store expiry time
+    const expiryTime = Date.now() + (parseInt(expiresIn) || 3600) * 1000;
+    sessionStorage.setItem("oauth_token_expiry", expiryTime.toString());
 
-      if (!response.code) {
-        if (authReject) authReject(new Error("No authorization code received"));
-        return;
-      }
+    // Clean URL (remove token from visible URL for security)
+    window.history.replaceState({}, "", window.location.pathname);
 
-      // Exchange code for token via backend
-      try {
-        const tokenResponse = await fetch(`${API_BASE_URL}/oauth/exchange`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            code: response.code,
-            code_verifier: currentCodeVerifier,
-            redirect_uri: "postmessage" // Required for popup UX
-          })
-        });
+    return true;
+  }
 
-        if (!tokenResponse.ok) {
-          const errData = await tokenResponse.json();
-          throw new Error(errData.detail || "Token exchange failed");
-        }
-
-        const tokens = await tokenResponse.json();
-
-        // Resolve the original promise with the access token
-        // The structure should match what gapi expects or just the access_token
-        if (authResolve) authResolve({
-          access_token: tokens.access_token,
-          expires_in: tokens.expires_in,
-          scope: tokens.scope,
-          token_type: tokens.token_type
-        });
-
-      } catch (err) {
-        console.error("Token exchange error:", err);
-        if (authReject) authReject(err);
-      } finally {
-        // Cleanup
-        authResolve = null;
-        authReject = null;
-        currentCodeVerifier = null;
-      }
-    }
-  });
+  return false;
 }
 
+/**
+ * Request access token using redirect flow
+ * Redirects to Google, backend handles callback
+ */
 async function requestAccessToken() {
-  return new Promise(async (resolve, reject) => {
-    authResolve = resolve;
-    authReject = reject;
+  // 1. Generate PKCE & State
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
+  const state = generateState();
 
-    try {
-      // 1. Generate PKCE & State
-      currentCodeVerifier = generateCodeVerifier();
-      const codeChallenge = await generateCodeChallenge(currentCodeVerifier);
+  // 2. Store locally (backup)
+  sessionStorage.setItem("oauth_state", state);
+  sessionStorage.setItem("oauth_code_verifier", codeVerifier);
 
-      const state = generateState();
-      sessionStorage.setItem("oauth_state", state);
+  // 3. Send to backend for storage
+  const frontendRedirect = window.location.origin + window.location.pathname;
 
-      // 2. Request Authorization Code
-      // We pass code_challenge to Google (even though creating client didn't enforce it, we send it now)
-      tokenClient.requestCode({
-        code_challenge: codeChallenge,
-        code_challenge_method: "S256",
-        state: state
-      });
-    } catch (err) {
-      reject(err);
+  try {
+    const initResponse = await fetch(`${API_BASE_URL}/oauth/init`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        state: state,
+        code_verifier: codeVerifier,
+        frontend_redirect: frontendRedirect
+      })
+    });
+
+    if (!initResponse.ok) {
+      throw new Error("Failed to initialize OAuth flow");
     }
-  });
+
+    console.log("✅ OAuth init successful, redirecting to Google...");
+
+  } catch (err) {
+    console.error("OAuth init error:", err);
+    throw err;
+  }
+
+  // 4. Build Google Auth URL and redirect
+  const CLIENT_ID = isLocalhost ? CLIENT_ID_DEV : CLIENT_ID_PROD;
+  const REDIRECT_URI = `${API_BASE_URL}/oauth/callback`;
+
+  const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  authUrl.searchParams.set("client_id", CLIENT_ID);
+  authUrl.searchParams.set("redirect_uri", REDIRECT_URI);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("scope", "https://www.googleapis.com/auth/drive.readonly");
+  authUrl.searchParams.set("state", state);
+  authUrl.searchParams.set("code_challenge", codeChallenge);
+  authUrl.searchParams.set("code_challenge_method", "S256");
+  authUrl.searchParams.set("access_type", "offline");
+  authUrl.searchParams.set("prompt", "consent");
+
+  // Redirect to Google (using replace to avoid back button issues)
+  window.location.replace(authUrl.toString());
+
+  // This promise won't resolve because page redirects
+  // Token will be available on return via handleOAuthReturn()
+  return new Promise(() => { });
+}
+
+/**
+ * Check if we have a valid token
+ */
+function hasValidToken() {
+  const token = gapi.client.getToken();
+  if (!token) return false;
+
+  const expiry = sessionStorage.getItem("oauth_token_expiry");
+  if (expiry && Date.now() > parseInt(expiry)) {
+    // Token expired
+    gapi.client.setToken(null);
+    return false;
+  }
+
+  return true;
 }
 
 
@@ -441,12 +449,15 @@ async function requestAccessToken() {
 async function openDrivePicker(targetInput) {
   try {
     if (!gapiInitialized) await initGapiClient();
-    if (!tokenClient) initializeTokenClient();
 
-    // Ensure we have a valid token
-    const token = gapi.client.getToken();
-    if (!token) {
+    // Check if we just returned from OAuth with a token
+    handleOAuthReturn();
+
+    // Check if we have a valid token
+    if (!hasValidToken()) {
+      // No token - start OAuth flow (will redirect)
       await requestAccessToken();
+      return; // Page will redirect, so we stop here
     }
 
     if (!pickerInitialized) {
@@ -518,8 +529,14 @@ async function showFilesFromDrive(folderId, containerId) {
 
   try {
     if (!gapiInitialized) await initGapiClient();
-    if (!tokenClient) initializeTokenClient();
-    if (!gapi.client.getToken()) await requestAccessToken();
+
+    // Check for token on return
+    handleOAuthReturn();
+
+    if (!hasValidToken()) {
+      await requestAccessToken();
+      return; // Page will redirect
+    }
 
     const resp = await gapi.client.drive.files.list({
       q: `'${folderId}' in parents and trashed = false`,

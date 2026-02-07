@@ -6,7 +6,7 @@ Advanced RAG Chain using FlashRank and Multi-Query Retrieval
 
 from typing import Dict, Any, List
 import logging
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_pinecone import PineconeVectorStore
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.multi_query import MultiQueryRetriever
@@ -14,6 +14,8 @@ from langchain_community.document_compressors.flashrank_rerank import FlashrankR
 from langchain.chains import ConversationalRetrievalChain
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import BaseOutputParser
+from langchain_core.embeddings import Embeddings
+from google import genai
 
 from app.config import settings
 from app.chains.chain_utils import get_memory, QA_PROMPT, session_chains, session_memories
@@ -21,6 +23,40 @@ from app.chains.chain_utils import get_memory, QA_PROMPT, session_chains, sessio
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+class GenAIEmbeddings(Embeddings):
+    """
+    Custom Embeddings class using google.genai SDK directly.
+    Ensures 768-dimensional output to match Pinecone index.
+    """
+    
+    def __init__(self, model: str = "gemini-embedding-001", dimensions: int = 768):
+        self.model = model
+        self.dimensions = dimensions
+        self._client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+    
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """Embed a list of documents."""
+        embeddings = []
+        for text in texts:
+            result = self._client.models.embed_content(
+                model=self.model,
+                contents=text[:8000],
+                config={"output_dimensionality": self.dimensions}
+            )
+            embeddings.append(list(result.embeddings[0].values))
+        return embeddings
+    
+    def embed_query(self, text: str) -> List[float]:
+        """Embed a query."""
+        result = self._client.models.embed_content(
+            model=self.model,
+            contents=text[:8000],
+            config={"output_dimensionality": self.dimensions}
+        )
+        return list(result.embeddings[0].values)
+
 
 class LineListOutputParser(BaseOutputParser[List[str]]):
     """Output parser for a list of lines."""
@@ -34,11 +70,8 @@ def get_advanced_retriever(namespace: str):
     1. Multi-Query Retriever (Expansion) -> Gets ~10 docs
     2. FlashRank Reranker (Compression) -> Selects Top 5
     """
-    # Initialize fresh embeddings for this request to avoid closed session issues
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/text-embedding-004",
-        google_api_key=settings.GOOGLE_API_KEY
-    )
+    # Use custom embeddings with explicit 768 dimensions
+    embeddings = GenAIEmbeddings(model="gemini-embedding-001", dimensions=768)
     
     # Initialize fresh vectorstore
     vectorstore = PineconeVectorStore(

@@ -1,13 +1,24 @@
-"""Embedding endpoint using Google Generative AI"""
+"""Embedding endpoint using Google GenAI SDK"""
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 import hashlib
 
+from google import genai
 from app.config import settings
 
 router = APIRouter()
+
+# Initialize genai client
+_client = None
+
+def get_genai_client():
+    """Get or create genai client"""
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+    return _client
 
 # Simple embedding cache
 embedding_cache = {}
@@ -41,17 +52,14 @@ async def get_embedding_internal(text: str) -> Optional[List[float]]:
         return embedding_cache[cache_key]
     
     try:
-        import google.generativeai as genai
-        
-        genai.configure(api_key=settings.GOOGLE_API_KEY)
-        
-        result = genai.embed_content(
-            model="models/text-embedding-004",
-            content=trimmed,
-            task_type="retrieval_document"
+        client = get_genai_client()
+        result = client.models.embed_content(
+            model="gemini-embedding-001",
+            contents=trimmed,
+            config={"output_dimensionality": 768}
         )
         
-        embedding = result['embedding']
+        embedding = list(result.embeddings[0].values)
         
         # Cache
         if len(embedding_cache) < MAX_CACHE_SIZE:
@@ -66,7 +74,7 @@ async def get_embedding_internal(text: str) -> Optional[List[float]]:
 
 @router.post("/ai/embed", response_model=EmbedResponse)
 async def get_embedding(request: EmbedRequest):
-    """Generate embedding for text using Google Generative AI"""
+    """Generate embedding for text using Google GenAI"""
     
     if not request.text or len(request.text.strip()) < 10:
         raise HTTPException(status_code=400, detail="Text too short for embedding")
@@ -77,18 +85,15 @@ async def get_embedding(request: EmbedRequest):
         return EmbedResponse(embedding=embedding_cache[cache_key], cached=True)
     
     try:
-        import google.generativeai as genai
+        client = get_genai_client()
         
-        genai.configure(api_key=settings.GOOGLE_API_KEY)
-        
-        # Use text-embedding-004 model
-        result = genai.embed_content(
-            model="models/text-embedding-004",
-            content=request.text[:8000],  # Limit text length
-            task_type="retrieval_document"
+        result = client.models.embed_content(
+            model="gemini-embedding-001",
+            contents=request.text[:8000],
+            config={"output_dimensionality": 768}
         )
         
-        embedding = result['embedding']
+        embedding = list(result.embeddings[0].values)
         
         # Cache the result
         if len(embedding_cache) < MAX_CACHE_SIZE:
@@ -99,4 +104,3 @@ async def get_embedding(request: EmbedRequest):
     except Exception as e:
         print(f"❌ Embedding error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Embedding failed: {str(e)}")
-

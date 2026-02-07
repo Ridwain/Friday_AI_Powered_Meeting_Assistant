@@ -111,12 +111,15 @@ async def scrape_and_upsert(request: ScrapeAndUpsertRequest):
         raise HTTPException(status_code=400, detail="Invalid URL")
     
     try:
-        import google.generativeai as genai
+        from google import genai
         from urllib.parse import urlparse
         
+        # Initialize client
+        client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+        
         # Fetch and parse
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.get(
+        async with httpx.AsyncClient(timeout=20.0) as http_client:
+            response = await http_client.get(
                 request.url,
                 headers={"User-Agent": "Friday/1.0"},
                 follow_redirects=True
@@ -139,17 +142,16 @@ async def scrape_and_upsert(request: ScrapeAndUpsertRequest):
         chunks = chunk_text(full_text, 1400, 100)
         
         # Generate embeddings and prepare vectors
-        genai.configure(api_key=settings.GOOGLE_API_KEY)
         vectors = []
         
         for i, chunk in enumerate(chunks):
-            # Get embedding
-            result = genai.embed_content(
-                model="models/text-embedding-004",
-                content=chunk[:8000],
-                task_type="retrieval_document"
+            # Get embedding using new API
+            result = client.models.embed_content(
+                model="gemini-embedding-001",
+                contents=chunk[:8000],
+                config={"output_dimensionality": 768}
             )
-            embedding = result['embedding']
+            embedding = list(result.embeddings[0].values)
             
             vectors.append({
                 "id": vector_id_for(request.url, i),

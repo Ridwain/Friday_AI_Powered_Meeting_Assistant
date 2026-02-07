@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     PINECONE_INDEX_NAME: str = "siat"
     SERP_API_KEY: str = ""
     
+    # URLs for OAuth redirect flow
+    BACKEND_URL: str = "http://localhost:3001"
+    FRONTEND_URL: str = "http://localhost:5000"
+    
     # Server
     PORT: int = 3001
     ALLOW_ALL_EXTENSIONS: bool = True
